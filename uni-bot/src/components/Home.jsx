@@ -42,8 +42,8 @@ function Home({ onSelectSchool }) {
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-[#654AEC] font-sans">
-      <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-between px-8 lg:flex-row lg:px-12">
-        <div className="z-20 flex min-w-[100px] w-full max-w-xl flex-col items-start pt-20 lg:max-w-none lg:pt-0">
+      <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-between overflow-hidden px-8 lg:flex-row lg:px-12">
+        <div className="z-20 flex min-w-[100px] w-[520px] max-w-full flex-col items-start pt-20 lg:pt-0">
           <p className="mb-2 text-lg font-medium text-white/80 md:text-xl">
             학사 행정 AI 비서
           </p>
@@ -111,13 +111,13 @@ function Home({ onSelectSchool }) {
         </div>
 
         <div className="relative mt-12 flex w-full justify-center lg:mt-0 lg:w-1/2 lg:justify-end">
-          <div className="pointer-events-none absolute left-1/2 top-1/2 h-96 w-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/10 blur-3xl" />
-
           <img
             src="/bot1.png"
             alt="Uni-Bot Mascot"
-            className="relative z-10 flex w-[500px] max-w-full flex-wrap object-contain drop-shadow-2xl"
+            className="z-10 mt-[127px] mb-[-168px] flex w-[619px] max-w-full flex-wrap overflow-hidden rounded-[170px] object-contain drop-shadow-2xl"
           />
+
+          <div className="pointer-events-none absolute left-1/2 top-1/2 h-96 w-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/10 blur-3xl" />
         </div>
       </main>
 

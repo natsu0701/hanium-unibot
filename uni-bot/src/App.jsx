@@ -8,6 +8,7 @@ import {
 import AdminDashboard from './components/AdminDashboard'
 import ChatScreen from './components/ChatScreen'
 import Home from './components/Home'
+import PdfViewer from './components/PdfViewer'
 import RegulationBrowser from './components/RegulationBrowser'
 import { LINE_ICON } from './constants/iconProps'
 
@@ -22,6 +23,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState('konkuk')
   const [regulationBrowserOpen, setRegulationBrowserOpen] = useState(false)
   const [studentPdfFile, setStudentPdfFile] = useState(null)
+  const [pdfPage, setPdfPage] = useState(1)
 
   const isStudentView = currentUser !== 'admin'
 
@@ -34,7 +36,7 @@ function App() {
     <div className="flex h-screen flex-col overflow-hidden">
       {isChatStarted ? (
         <>
-          <header className="flex h-14 w-full shrink-0 items-center justify-between gap-3 bg-[#8B5CF6] px-4 text-white">
+          <header className="relative flex h-14 w-full shrink-0 items-center justify-between gap-3 bg-[#8B5CF6] px-4 text-white">
             <div className="flex min-w-0 items-center gap-2">
               <GraduationCap className="hidden shrink-0 sm:block" size={22} {...LINE_ICON} />
               <p className="truncate font-bold">Uni-Bot</p>
@@ -42,10 +44,10 @@ function App() {
                 Self-RAG
               </span>
             </div>
-            <div className="hidden max-w-xl flex-1 justify-center px-4 md:flex">
-              <span className="flex items-center gap-2 truncate rounded-full bg-white/15 px-4 py-1.5 text-xs font-medium backdrop-blur-sm">
+            <div className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 px-4 lg:block">
+              <span className="flex items-center gap-2 whitespace-nowrap rounded-full bg-white/15 px-4 py-1.5 text-xs font-medium backdrop-blur-sm">
                 <Lightbulb size={14} {...LINE_ICON} className="shrink-0 text-amber-200" aria-hidden />
-                <span className="truncate">Self-RAG 기반 학사 규정 AI 검색 플랫폼</span>
+                <span>Self-RAG 기반 학사 규정 AI 검색 플랫폼</span>
               </span>
             </div>
             <div className="flex shrink-0 items-center gap-2">
@@ -87,11 +89,19 @@ function App() {
             {currentUser === 'admin' ? (
               <AdminDashboard />
             ) : (
-              <ChatScreen
-                currentUser={currentUser}
-                activePdfFile={studentPdfFile}
-                onPdfFileChange={setStudentPdfFile}
-              />
+              <div className="flex h-full min-h-0 w-full flex-1 flex-row overflow-hidden">
+                <div className="flex min-h-0 w-1/2 flex-col overflow-hidden border-r border-slate-200">
+                  <ChatScreen onSourceClick={(page) => setPdfPage(page)} />
+                </div>
+                <div className="flex min-h-0 w-1/2 flex-col overflow-hidden">
+                  <PdfViewer
+                    targetPage={pdfPage}
+                    currentUser={currentUser}
+                    activePdfFile={studentPdfFile}
+                    onPdfFileChange={setStudentPdfFile}
+                  />
+                </div>
+              </div>
             )}
           </main>
 
