@@ -45,6 +45,7 @@ function PdfViewer({
     setPageInput(String(pageNumber))
   }, [pageNumber])
 
+  // 현재 페이지가 바뀌면 입력창 표시값도 동기화합니다.
   // 부모로부터 전달된 targetPage가 "실제로 바뀔 때만" 해당 페이지로 이동합니다.
   // (numPages 변경 등 다른 이유로 효과가 재실행될 때 페이지가 되돌아가는 것을 방지)
   const appliedTargetRef = useRef(targetPage)

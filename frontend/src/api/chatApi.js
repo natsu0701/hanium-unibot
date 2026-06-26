@@ -3,7 +3,7 @@ import axios from 'axios'
 const API_BASE_URL = 'http://localhost:8000'
 
 /**
- * 백엔드 챗봇 API와 통신하는 함수.
+ * 백엔드 채팅 API와 통신하는 함수.
  *
  * 요청 Body: { message, user_id }
  * 응답 형식: { data: { answer, sources, confidence } }
@@ -18,11 +18,14 @@ export async function sendChatMessage(message) {
       user_id: 'tester',
     })
 
-    // 백엔드 응답이 { data: { answer, sources, confidence } } 형태이므로 내부 data를 반환
+    // 백엔드 응답은 { data: { answer, sources, confidence } } 형태이므로 내부 data를 반환
     return response.data.data
   } catch (error) {
     const serverMessage = error?.response?.data?.error?.message
-    throw new Error(serverMessage ?? '채팅 요청 중 오류가 발생했습니다.')
+    throw new Error(
+      serverMessage ?? '채팅 요청 중 오류가 발생했습니다.',
+      { cause: error },
+    )
   }
 }
 

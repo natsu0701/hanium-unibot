@@ -5,11 +5,11 @@ import {
   Lightbulb,
   Search as SearchIcon,
 } from 'lucide-react'
-import AdminDashboard from './components/AdminDashboard'
+import AdminDashboard from './pages/AdminDashboard'
 import ChatScreen from './components/ChatScreen'
-import Home from './components/Home'
+import Home from './pages/Home'
 import PdfViewer from './components/PdfViewer'
-import RegulationBrowser from './components/RegulationBrowser'
+import RegulationBrowser from './pages/RegulationBrowser'
 import { LINE_ICON } from './constants/iconProps'
 
 const USERS = [
