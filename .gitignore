@@ -1,6 +1,6 @@
 # Backend
-backend/.env
-backend/.env/
+.env
+**/.env
 backend/.venv/
 backend/chroma_db/
 backend/chroma.sqlite3
