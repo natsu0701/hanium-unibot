@@ -1,13 +1,11 @@
 """
-pdf_to_json.py 의 역할
+extracted_pdf_withoutAPI.py 의 역할
 → extracted_pdf.py의 임시 대체용, extract_pdf.py를 토대로 만들어짐
 → Upstage API 없이 PyMuPDF로 PDF 텍스트 추출
 → extracted.json 형식으로 저장
 
-**API key를 받으면 삭제할 예정**
-
-사용법: python pdf_to_json.py <pdf파일>
-예시:   python pdf_to_json.py data/guide.pdf
+사용법: extracted_pdf_withoutAPI.py <pdf파일>
+예시:   python extracted_pdf_withouteAPI.py data/guide.pdf
 """
 
 import json
@@ -17,9 +15,11 @@ import sys
 
 from pypdf import PdfReader
 
-
+# json파일 저장 위치 지정
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-output_path = os.path.join(BASE_DIR, "extracted.json")
+output_dir = os.path.join(BASE_DIR, "..", "data", "processed")
+os.makedirs(output_dir, exist_ok=True)
+output_path = os.path.join(output_dir, "extracted.json")
 
 # ────────────────────────────────────────────
 # 전처리
