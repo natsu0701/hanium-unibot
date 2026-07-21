@@ -10,6 +10,7 @@ backend/*.sqlite3
 backend/uploads/
 backend/**/__pycache__/
 *.pyc
+backend/data/processed/
 
 # Frontend
 frontend/node_modules/
