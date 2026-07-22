@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -9,6 +10,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from app.db import Base, SessionLocal, engine
+from app.models import ChatLog
 from app.services.answer_service import generate_answer
 from app.services.rag_service import (
     DEFAULT_CHUNKS_PATH,
@@ -32,7 +35,10 @@ def clean_text(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def make_excerpt(text: str, max_length: int = 300) -> str:
+def make_excerpt(
+    text: str,
+    max_length: int = 300,
+) -> str:
     """검색된 청크 원문을 지정한 길이로 줄여 반환합니다."""
     cleaned = clean_text(text)
 
@@ -44,17 +50,26 @@ def make_excerpt(text: str, max_length: int = 300) -> str:
 
 def build_source_text(result: dict) -> str:
     """
-    기존 프론트 SourceChip에서 표시할 source.text를 생성합니다.
+    프론트 SourceChip에서 표시할 source.text를 생성합니다.
 
     예:
     guide.pdf · 21페이지 · 제48조 (휴학)
     """
     parts: list[str] = []
 
-    doc_name = str(result.get("doc_name") or "").strip()
+    doc_name = str(
+        result.get("doc_name") or ""
+    ).strip()
+
     page = result.get("page")
-    article = str(result.get("article") or "").strip()
-    article_title = str(result.get("article_title") or "").strip()
+
+    article = str(
+        result.get("article") or ""
+    ).strip()
+
+    article_title = str(
+        result.get("article_title") or ""
+    ).strip()
 
     if doc_name:
         parts.append(doc_name)
@@ -63,7 +78,6 @@ def build_source_text(result: dict) -> str:
         parts.append(f"{page}페이지")
 
     if article:
-        # article 값에 이미 '제', '조'가 포함되었을 수도 있으므로 정리합니다.
         normalized_article = article
 
         if not normalized_article.startswith("제"):
@@ -82,25 +96,44 @@ def build_source_text(result: dict) -> str:
 
 def source_from_result(result: dict) -> dict:
     """
-    기존 프론트와 호환되는 출처 데이터를 생성합니다.
+    프론트와 호환되는 출처 데이터를 생성합니다.
 
-    프론트에서 직접 사용하는 필드:
+    프론트에서 사용하는 주요 필드:
     - source.text
     - source.page
+    - source.evidence
     """
     return {
         "text": build_source_text(result),
-        "page": int(result.get("page") or 0),
+        "page": int(
+            result.get("page") or 0
+        ),
 
         # 상세 출처 표시 및 향후 확장용
-        "doc_id": str(result.get("doc_id") or ""),
-        "doc_name": str(result.get("doc_name") or ""),
-        "chapter": str(result.get("chapter") or ""),
-        "chapter_title": str(result.get("chapter_title") or ""),
-        "article": str(result.get("article") or ""),
-        "article_title": str(result.get("article_title") or ""),
-        "is_table": bool(result.get("is_table", False)),
-        "score": float(result.get("score") or 0.0),
+        "doc_id": str(
+            result.get("doc_id") or ""
+        ),
+        "doc_name": str(
+            result.get("doc_name") or ""
+        ),
+        "chapter": str(
+            result.get("chapter") or ""
+        ),
+        "chapter_title": str(
+            result.get("chapter_title") or ""
+        ),
+        "article": str(
+            result.get("article") or ""
+        ),
+        "article_title": str(
+            result.get("article_title") or ""
+        ),
+        "is_table": bool(
+            result.get("is_table", False)
+        ),
+        "score": float(
+            result.get("score") or 0.0
+        ),
         "evidence": make_excerpt(
             str(result.get("text") or ""),
             max_length=400,
@@ -108,16 +141,74 @@ def source_from_result(result: dict) -> dict:
     }
 
 
+def save_chat_log(
+    *,
+    user_id: str,
+    conversation_id: str,
+    user_message: str,
+    bot_answer: str,
+    confidence: float,
+    sources: list[dict],
+) -> None:
+    """
+    최종 채팅 결과를 SQLite chat_logs 테이블에 저장합니다.
+    """
+    db = SessionLocal()
+
+    try:
+        chat_log = ChatLog(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            user_message=user_message,
+            bot_answer=bot_answer,
+            confidence=confidence,
+            sources_json=json.dumps(
+                sources,
+                ensure_ascii=False,
+            ),
+        )
+
+        db.add(chat_log)
+        db.commit()
+
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
+        db.close()
+
+
 # =========================================================
-# 서버 시작 시 RAG 데이터 확인
+# 서버 시작 처리
 # =========================================================
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     """
-    서버 시작 시 ChromaDB가 비어 있으면
-    scripts/extracted.json 데이터를 자동으로 적재합니다.
+    서버 시작 시 다음 작업을 수행합니다.
+
+    1. SQLite 테이블 생성
+    2. ChromaDB 데이터 상태 확인
+    3. ChromaDB가 비어 있으면 processed JSON 자동 적재
     """
+
+    # SQLite 테이블을 생성합니다.
+    try:
+        Base.metadata.create_all(
+            bind=engine
+        )
+
+        print(
+            "SQLite 테이블 초기화 완료"
+        )
+
+    except Exception as exc:
+        print(
+            f"SQLite 초기화 중 오류 발생: {exc}"
+        )
+
+    # ChromaDB를 확인합니다.
     try:
         current_count = collection_count()
 
@@ -140,7 +231,7 @@ async def lifespan(_: FastAPI):
 
             else:
                 print(
-                    "경고: extracted.json을 찾을 수 없습니다. "
+                    "경고: 청크 JSON 파일을 찾을 수 없습니다. "
                     f"경로: {DEFAULT_CHUNKS_PATH}"
                 )
 
@@ -151,8 +242,11 @@ async def lifespan(_: FastAPI):
             )
 
     except Exception as exc:
-        # 서버 전체 실행은 유지하되 초기화 오류를 로그로 남깁니다.
-        print(f"RAG 초기화 중 오류 발생: {exc}")
+        # RAG 초기화가 실패하더라도 서버 상태 확인은
+        # 가능하도록 서버 전체 실행은 유지합니다.
+        print(
+            f"RAG 초기화 중 오류 발생: {exc}"
+        )
 
     yield
 
@@ -167,7 +261,7 @@ app = FastAPI(
         "대학 학사 문서를 검색하고 OpenAI를 통해 "
         "근거 기반 답변을 생성하는 Uni-Bot API"
     ),
-    version="1.2.0",
+    version="1.3.0",
     lifespan=lifespan,
 )
 
@@ -230,7 +324,7 @@ class SearchRequest(BaseModel):
 
 @app.get("/health")
 def health():
-    """서버와 RAG 데이터 상태를 확인합니다."""
+    """서버, RAG 데이터, SQLite 상태를 확인합니다."""
     try:
         rag_chunk_count = collection_count()
 
@@ -243,6 +337,7 @@ def health():
             "version": app.version,
             "rag_chunk_count": rag_chunk_count,
             "openai_rag_enabled": True,
+            "chat_history_enabled": True,
             "timestamp": utc_now(),
         },
         "request_id": f"req_{uuid4().hex}",
@@ -306,13 +401,17 @@ def chat(request: ChatRequest):
 
     처리 순서:
     1. 사용자 질문으로 ChromaDB 검색
-    2. 관련 청크 Top-5 조회
+    2. 관련 청크 Top-3 조회
     3. 검색 결과를 OpenAI에 전달
-    4. 프롬프트 기준으로 답변 요약 및 정제
-    5. 실제 답변 작성에 사용한 출처만 반환
+    4. 질문에 필요한 내용만 요약한 답변 생성
+    5. 실제로 사용한 출처만 선택
+    6. 최종 질문·답변·출처를 SQLite에 저장
     """
     message_id = f"msg_{uuid4().hex}"
-    conversation_id = request.conversation_id or uuid4()
+    conversation_id = (
+        request.conversation_id
+        or uuid4()
+    )
     request_id = f"req_{uuid4().hex}"
 
     try:
@@ -323,7 +422,8 @@ def chat(request: ChatRequest):
             min_score=0.20,
         )
 
-        # 2. 검색 결과를 OpenAI에 전달하여 최종 답변을 생성합니다.
+        # 2. 검색 결과를 OpenAI에 전달해
+        # 최종 답변을 생성합니다.
         generated = generate_answer(
             question=request.message,
             search_results=search_results,
@@ -341,8 +441,12 @@ def chat(request: ChatRequest):
             detail=f"답변 생성 중 오류가 발생했습니다: {exc}",
         ) from exc
 
-    # OpenAI가 실제 답변 작성에 사용했다고 선택한 출처 번호입니다.
-    used_indexes = generated.get("used_source_indexes", [])
+    # OpenAI가 실제 답변 작성에 사용했다고 선택한
+    # 검색 결과 번호입니다.
+    used_indexes = generated.get(
+        "used_source_indexes",
+        [],
+    )
 
     if not isinstance(used_indexes, list):
         used_indexes = []
@@ -357,13 +461,13 @@ def chat(request: ChatRequest):
         ):
             valid_used_indexes.append(index)
 
-    # 사용된 출처만 검색 결과에서 선택합니다.
+    # 실제 답변 작성에 사용한 검색 결과만 선택합니다.
     used_results = [
         search_results[index]
         for index in valid_used_indexes
     ]
 
-    # 프론트가 사용할 수 있는 출처 형식으로 변환합니다.
+    # 프론트에서 사용하는 출처 형식으로 변환합니다.
     sources = [
         source_from_result(result)
         for result in used_results
@@ -376,22 +480,54 @@ def chat(request: ChatRequest):
 
     try:
         confidence = float(
-            generated.get("confidence", 0.0)
+            generated.get(
+                "confidence",
+                0.0,
+            )
         )
 
     except (TypeError, ValueError):
         confidence = 0.0
 
-    confidence = max(0.0, min(confidence, 1.0))
+    confidence = max(
+        0.0,
+        min(confidence, 1.0),
+    )
+
+    # 최종 채팅 결과를 SQLite에 저장합니다.
+    try:
+        save_chat_log(
+            user_id=request.user_id,
+            conversation_id=str(
+                conversation_id
+            ),
+            user_message=request.message,
+            bot_answer=answer,
+            confidence=confidence,
+            sources=sources,
+        )
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "답변은 생성되었지만 채팅 이력 저장 중 "
+                f"오류가 발생했습니다: {exc}"
+            ),
+        ) from exc
+
+    created_at = utc_now()
 
     return {
         "data": {
             "answer": answer,
             "sources": sources,
             "confidence": confidence,
-            "conversation_id": str(conversation_id),
+            "conversation_id": str(
+                conversation_id
+            ),
             "message_id": message_id,
-            "created_at": utc_now(),
+            "created_at": created_at,
         },
         "request_id": request_id,
     }

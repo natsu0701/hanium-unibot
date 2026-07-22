@@ -29,3 +29,8 @@ Thumbs.db
 
 # Logs
 *.log
+
+backend/unibot.db
+backend/*.db
+backend/*.sqlite
+backend/*.sqlite3
