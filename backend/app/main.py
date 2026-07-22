@@ -319,8 +319,8 @@ def chat(request: ChatRequest):
         # 1. 질문과 관련된 문서 청크를 검색합니다.
         search_results = search(
             request.message,
-            n_results=5,
-            min_score=0.0,
+            n_results=3,
+            min_score=0.20,
         )
 
         # 2. 검색 결과를 OpenAI에 전달하여 최종 답변을 생성합니다.

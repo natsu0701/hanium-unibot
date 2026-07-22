@@ -5,6 +5,7 @@ import {
   Lightbulb,
   Search as SearchIcon,
 } from 'lucide-react'
+
 import AdminDashboard from './pages/AdminDashboard'
 import ChatScreen from './components/ChatScreen'
 import Home from './pages/Home'
@@ -24,13 +25,7 @@ function App() {
   const [regulationBrowserOpen, setRegulationBrowserOpen] = useState(false)
   const [studentPdfFile, setStudentPdfFile] = useState(null)
   const [pdfPage, setPdfPage] = useState(1)
-<<<<<<< HEAD
-  // RAG 모드 표시용 토글. 아직 Self-RAG가 완전히 연동되지 않아 기본값은 'v1'.
-  // 현재는 배지 텍스트만 전환되는 껍데기 상태입니다(실제 동작 미연동).
-  const [ragMode, setRagMode] = useState('v1')
-=======
   const [pdfHighlightText, setPdfHighlightText] = useState('')
->>>>>>> d2c565d (feat: RAG 검색 및 답변 기능 구현)
 
   const isStudentView = currentUser !== 'admin'
 
@@ -78,6 +73,19 @@ function App() {
     setIsChatStarted(true)
   }
 
+  const handleUserChange = (event) => {
+    const nextUser = event.target.value
+
+    setCurrentUser(nextUser)
+    setRegulationBrowserOpen(false)
+
+    if (nextUser === 'admin') {
+      setStudentPdfFile(null)
+      setPdfPage(1)
+      setPdfHighlightText('')
+    }
+  }
+
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       {isChatStarted ? (
@@ -91,28 +99,10 @@ function App() {
               />
 
               <p className="truncate font-bold">Uni-Bot</p>
-<<<<<<< HEAD
-              <button
-                type="button"
-                onClick={() => setRagMode((mode) => (mode === 'v1' ? 'self' : 'v1'))}
-                title="RAG 모드 전환 (표시용 - 실제 동작 미연동)"
-                aria-label={`현재 RAG 모드: ${ragMode === 'v1' ? 'RAG v1' : 'Self-RAG'}. 클릭하여 전환`}
-                className="flex shrink-0 items-center gap-1.5 rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-[#8B5CF6] transition hover:bg-white/90"
-              >
-                <span
-                  className={`h-1.5 w-1.5 rounded-full transition-colors ${
-                    ragMode === 'self' ? 'bg-emerald-500' : 'bg-slate-300'
-                  }`}
-                  aria-hidden
-                />
-                {ragMode === 'v1' ? 'RAG v1' : 'Self-RAG'}
-              </button>
-=======
 
               <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-[#8B5CF6]">
                 Self-RAG
               </span>
->>>>>>> d2c565d (feat: RAG 검색 및 답변 기능 구현)
             </div>
 
             <div className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 px-4 lg:block">
@@ -154,7 +144,7 @@ function App() {
 
               <select
                 value={currentUser}
-                onChange={(event) => setCurrentUser(event.target.value)}
+                onChange={handleUserChange}
                 className="max-w-[10rem] rounded-md bg-white/20 py-1.5 pl-2 pr-8 text-xs text-white outline-none ring-1 ring-white/30 sm:max-w-none sm:pr-10 sm:text-sm"
               >
                 {USERS.map((user) => (
