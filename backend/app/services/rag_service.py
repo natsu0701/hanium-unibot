@@ -1,13 +1,3 @@
-"""
-Uni-Bot RAG 검색 서비스
-
-처리 과정:
-1. extracted.json 로드
-2. 청크 임베딩
-3. ChromaDB 저장
-4. 사용자 질문과 유사한 청크 검색
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -21,7 +11,7 @@ from sentence_transformers import SentenceTransformer
 
 
 # =========================================================
-# 기본 경로 및 설정
+# 기본 설정
 # =========================================================
 
 MODEL_NAME = "jhgan/ko-sroberta-multitask"
@@ -37,7 +27,6 @@ CHROMA_PATH = BACKEND_DIR / "chroma_db"
 DEFAULT_CHUNKS_PATH = BACKEND_DIR / "scripts" / "extracted.json"
 
 
-# 모델과 DB는 실제 사용할 때 한 번만 생성
 _model: SentenceTransformer | None = None
 _client: chromadb.PersistentClient | None = None
 
@@ -48,25 +37,31 @@ _client: chromadb.PersistentClient | None = None
 
 def get_model() -> SentenceTransformer:
     """
-    임베딩 모델을 최초 사용 시 한 번만 로드합니다.
+    임베딩 모델을 최초 호출 시 한 번만 로드합니다.
     """
     global _model
 
     if _model is None:
         print(f"임베딩 모델 로드 중: {MODEL_NAME}")
-        _model = SentenceTransformer(MODEL_NAME)
+
+        _model = SentenceTransformer(
+            MODEL_NAME
+        )
 
     return _model
 
 
 def get_client() -> chromadb.PersistentClient:
     """
-    ChromaDB 클라이언트를 최초 사용 시 한 번만 생성합니다.
+    ChromaDB 클라이언트를 최초 호출 시 한 번만 생성합니다.
     """
     global _client
 
     if _client is None:
-        CHROMA_PATH.mkdir(parents=True, exist_ok=True)
+        CHROMA_PATH.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
 
         _client = chromadb.PersistentClient(
             path=str(CHROMA_PATH)
@@ -78,8 +73,6 @@ def get_client() -> chromadb.PersistentClient:
 def get_collection():
     """
     학사 규정 전용 ChromaDB 컬렉션을 반환합니다.
-
-    cosine 공간을 사용하여 검색 거리를 계산합니다.
     """
     return get_client().get_or_create_collection(
         name=COLLECTION_NAME,
@@ -101,14 +94,14 @@ def collection_count() -> int:
 
 
 # =========================================================
-# JSON 로드 및 전처리
+# JSON 로드 및 청크 전처리
 # =========================================================
 
 def load_chunks(
     json_path: str | Path = DEFAULT_CHUNKS_PATH,
 ) -> list[dict[str, Any]]:
     """
-    extracted.json 파일을 읽어 청크 리스트를 반환합니다.
+    extracted.json 파일을 읽어 청크 리스트로 반환합니다.
     """
     path = Path(json_path)
 
@@ -125,30 +118,35 @@ def load_chunks(
 
     if not isinstance(data, list):
         raise ValueError(
-            "JSON 최상위 구조는 배열(list)이어야 합니다."
+            "청크 JSON 최상위 구조는 배열이어야 합니다."
         )
 
-    chunks = [
+    return [
         chunk
         for chunk in data
-        if isinstance(chunk, dict)
+        if (
+            isinstance(chunk, dict)
+            and str(chunk.get("text") or "").strip()
+        )
     ]
 
-    return chunks
 
-
-def build_search_text(chunk: dict[str, Any]) -> str:
+def build_search_text(
+    chunk: dict[str, Any],
+) -> str:
     """
     임베딩 검색에 사용할 문자열을 생성합니다.
-
-    장 제목, 조 제목, 본문을 함께 넣어
-    '휴학', '성적', '수강신청' 같은 제목 정보도
-    검색에 반영합니다.
     """
     parts = [
-        str(chunk.get("chapter_title") or "").strip(),
-        str(chunk.get("article_title") or "").strip(),
-        str(chunk.get("text") or "").strip(),
+        str(
+            chunk.get("chapter_title") or ""
+        ).strip(),
+        str(
+            chunk.get("article_title") or ""
+        ).strip(),
+        str(
+            chunk.get("text") or ""
+        ).strip(),
     ]
 
     return " ".join(
@@ -158,16 +156,16 @@ def build_search_text(chunk: dict[str, Any]) -> str:
     )
 
 
-def build_chunk_id(chunk: dict[str, Any]) -> str:
+def build_chunk_id(
+    chunk: dict[str, Any],
+) -> str:
     """
-    청크 내용을 기반으로 고정된 ID를 생성합니다.
-
-    같은 데이터를 다시 적재해도 ID가 같으므로
-    중복 저장을 방지할 수 있습니다.
+    동일 청크의 중복 저장을 막기 위해 고정 ID를 생성합니다.
     """
     raw_value = "|".join(
         [
             str(chunk.get("doc_id") or ""),
+            str(chunk.get("doc_name") or ""),
             str(chunk.get("page") or ""),
             str(chunk.get("article") or ""),
             str(chunk.get("text") or ""),
@@ -185,17 +183,27 @@ def build_metadata(
     chunk: dict[str, Any],
 ) -> dict[str, str | int | bool]:
     """
-    ChromaDB에 저장할 메타데이터를 생성합니다.
+    ChromaDB에 저장할 메타데이터를 구성합니다.
     """
     return {
-        "page": int(chunk.get("page") or 0),
-        "doc_id": str(chunk.get("doc_id") or ""),
-        "doc_name": str(chunk.get("doc_name") or ""),
-        "chapter": str(chunk.get("chapter") or ""),
+        "page": int(
+            chunk.get("page") or 0
+        ),
+        "doc_id": str(
+            chunk.get("doc_id") or ""
+        ),
+        "doc_name": str(
+            chunk.get("doc_name") or ""
+        ),
+        "chapter": str(
+            chunk.get("chapter") or ""
+        ),
         "chapter_title": str(
             chunk.get("chapter_title") or ""
         ),
-        "article": str(chunk.get("article") or ""),
+        "article": str(
+            chunk.get("article") or ""
+        ),
         "article_title": str(
             chunk.get("article_title") or ""
         ),
@@ -216,15 +224,14 @@ def save_to_chromadb(
     batch_size: int = 64,
 ) -> int:
     """
-    청크를 임베딩하고 ChromaDB에 저장합니다.
-
-    reset=True일 경우 기존 학사 규정 컬렉션을 삭제하고
-    처음부터 다시 생성합니다.
+    청크 목록을 임베딩한 후 ChromaDB에 저장합니다.
     """
     valid_chunks = [
         chunk
         for chunk in chunks
-        if str(chunk.get("text") or "").strip()
+        if str(
+            chunk.get("text") or ""
+        ).strip()
     ]
 
     if reset:
@@ -232,10 +239,10 @@ def save_to_chromadb(
             get_client().delete_collection(
                 COLLECTION_NAME
             )
-            print("기존 학사 규정 컬렉션 삭제 완료")
+            print("기존 ChromaDB 컬렉션 삭제 완료")
 
         except Exception:
-            # 처음 실행 시 컬렉션이 없을 수 있으므로 무시
+            # 최초 실행 시 컬렉션이 없을 수 있습니다.
             pass
 
     collection = get_collection()
@@ -243,8 +250,12 @@ def save_to_chromadb(
 
     total_count = len(valid_chunks)
 
+    if total_count == 0:
+        print("저장할 유효 청크가 없습니다.")
+        return 0
+
     print(
-        f"총 {total_count}개 청크 임베딩 중..."
+        f"총 {total_count}개 청크 임베딩 시작"
     )
 
     for start_index in range(
@@ -274,7 +285,7 @@ def save_to_chromadb(
                 for chunk in batch
             ],
             documents=[
-                str(chunk["text"])
+                str(chunk.get("text") or "")
                 for chunk in batch
             ],
             embeddings=vectors,
@@ -285,7 +296,7 @@ def save_to_chromadb(
         )
 
     print(
-        f"ChromaDB 저장 완료: {total_count}개 청크"
+        f"ChromaDB 저장 완료: {total_count}개"
     )
 
     return total_count
@@ -297,16 +308,12 @@ def ingest_json(
     reset: bool = True,
 ) -> int:
     """
-    JSON 파일을 읽고 ChromaDB까지 적재합니다.
+    JSON을 불러와 ChromaDB까지 적재합니다.
     """
     chunks = load_chunks(json_path)
 
-    print(
-        f"파일 로드 완료: {json_path}"
-    )
-    print(
-        f"총 {len(chunks)}개 청크"
-    )
+    print(f"청크 파일 로드 완료: {json_path}")
+    print(f"로드된 청크 수: {len(chunks)}")
 
     return save_to_chromadb(
         chunks,
@@ -337,6 +344,8 @@ def tokenize(text: str) -> set[str]:
         "있는지",
         "있나요",
         "되나요",
+        "가능한가요",
+        "가능해",
         "최대",
     }
 
@@ -353,8 +362,7 @@ def calculate_keyword_score(
     metadata: dict[str, Any],
 ) -> float:
     """
-    질문의 주요 단어가 문서·장 제목·조 제목에
-    얼마나 포함되어 있는지 계산합니다.
+    질문 핵심어와 문서 핵심어의 일치 비율을 계산합니다.
     """
     query_tokens = tokenize(query)
 
@@ -373,7 +381,9 @@ def calculate_keyword_score(
         ]
     )
 
-    document_tokens = tokenize(searchable_text)
+    document_tokens = tokenize(
+        searchable_text
+    )
 
     overlap_count = len(
         query_tokens & document_tokens
@@ -383,7 +393,7 @@ def calculate_keyword_score(
 
 
 # =========================================================
-# 검색
+# 청크 검색
 # =========================================================
 
 def search(
@@ -395,7 +405,9 @@ def search(
     """
     사용자 질문과 관련된 청크를 반환합니다.
 
-    의미 유사도 85% + 키워드 일치도 15%를 반영합니다.
+    최종 점수:
+    - 의미 유사도 85%
+    - 키워드 일치도 15%
     """
     query = query.strip()
 
@@ -408,12 +420,9 @@ def search(
     if stored_count == 0:
         raise RuntimeError(
             "ChromaDB가 비어 있습니다. "
-            "먼저 python app/services/rag_service.py를 "
-            "실행해 데이터를 적재하세요."
+            "먼저 extracted.json을 적재해야 합니다."
         )
 
-    # 최종 결과보다 많은 후보를 가져온 뒤
-    # 키워드 점수와 중복 제거를 적용
     candidate_count = min(
         stored_count,
         max(n_results * 5, 15),
@@ -434,19 +443,19 @@ def search(
         ],
     )
 
-    documents = raw_results.get(
-        "documents",
-        [[]],
+    documents = (
+        raw_results.get("documents")
+        or [[]]
     )[0]
 
-    metadatas = raw_results.get(
-        "metadatas",
-        [[]],
+    metadatas = (
+        raw_results.get("metadatas")
+        or [[]]
     )[0]
 
-    distances = raw_results.get(
-        "distances",
-        [[]],
+    distances = (
+        raw_results.get("distances")
+        or [[]]
     )[0]
 
     candidates: list[dict[str, Any]] = []
@@ -456,7 +465,10 @@ def search(
         metadatas,
         distances,
     ):
-        # cosine distance는 작을수록 유사함
+        document = str(document or "")
+        metadata = metadata or {}
+
+        # cosine distance는 0에 가까울수록 유사합니다.
         semantic_score = max(
             0.0,
             min(
@@ -492,23 +504,16 @@ def search(
                     metadata.get("chapter") or ""
                 ),
                 "chapter_title": str(
-                    metadata.get(
-                        "chapter_title"
-                    ) or ""
+                    metadata.get("chapter_title") or ""
                 ),
                 "article": str(
                     metadata.get("article") or ""
                 ),
                 "article_title": str(
-                    metadata.get(
-                        "article_title"
-                    ) or ""
+                    metadata.get("article_title") or ""
                 ),
                 "is_table": bool(
-                    metadata.get(
-                        "is_table",
-                        False,
-                    )
+                    metadata.get("is_table", False)
                 ),
                 "score": round(
                     final_score,
@@ -516,6 +521,10 @@ def search(
                 ),
                 "semantic_score": round(
                     semantic_score,
+                    4,
+                ),
+                "keyword_score": round(
+                    keyword_score,
                     4,
                 ),
             }
@@ -536,7 +545,6 @@ def search(
         if candidate["score"] < min_score:
             continue
 
-        # 같은 문서·조·페이지가 반복되는 것 방지
         source_key = (
             candidate["doc_id"],
             candidate["article"],
@@ -560,9 +568,13 @@ def search(
 # =========================================================
 
 if __name__ == "__main__":
-    ingest_json(
+    inserted_count = ingest_json(
         DEFAULT_CHUNKS_PATH,
         reset=True,
+    )
+
+    print(
+        f"\n총 {inserted_count}개 청크 적재 완료"
     )
 
     test_question = (
@@ -570,12 +582,13 @@ if __name__ == "__main__":
     )
 
     print(
-        f"\n테스트 검색: {test_question}"
+        f"\n테스트 질문: {test_question}"
     )
 
     test_results = search(
         test_question,
         n_results=5,
+        min_score=0.0,
     )
 
     for index, result in enumerate(
@@ -584,7 +597,7 @@ if __name__ == "__main__":
     ):
         print(
             f"\n[{index}위] "
-            f"score: {result['score']}"
+            f"점수: {result['score']}"
         )
 
         print(

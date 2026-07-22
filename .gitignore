@@ -4,6 +4,7 @@
 backend/.venv/
 backend/chroma_db/
 backend/chroma.sqlite3
+backend/scripts/extracted.json
 backend/*.db
 backend/*.sqlite
 backend/*.sqlite3
