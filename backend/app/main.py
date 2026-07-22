@@ -116,7 +116,7 @@ def source_from_result(result: dict) -> dict:
 async def lifespan(_: FastAPI):
     """
     서버 시작 시 ChromaDB가 비어 있으면
-    scripts/extracted.json 데이터를 자동으로 적재합니다.
+    data/processed/extracted.json 데이터를 자동으로 적재합니다.
     """
     try:
         current_count = collection_count()

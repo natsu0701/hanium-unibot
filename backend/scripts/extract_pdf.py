@@ -37,8 +37,8 @@ output_dir = os.path.join(BASE_DIR, "..", "data", "processed")
 os.makedirs(output_dir, exist_ok=True)
 output_path = os.path.join(output_dir, "extracted.json")
 
-# .env 파일 읽기
-load_dotenv()
+# .env 파일 읽기 (backend/.env)
+load_dotenv(os.path.join(BASE_DIR, "..", ".env"))
 
 # API Key 읽기
 API_KEY = os.getenv("UPSTAGE_API_KEY")

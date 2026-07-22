@@ -50,8 +50,15 @@ uvicorn app.main:app --reload
 
 ### 환경 변수
 
-- `backend/scripts/.env`
-  - `UPSTAGE_API_KEY` — PDF 추출 스크립트(`extract_pdf.py`)에서 사용. Upstage API 없이 추출하려면 `extract_pdf_withoutAPI.py`를 사용하고 이 값은 생략 가능합니다.
+`backend/.env` 파일을 만들고 아래 값을 채워주세요.
+
+```
+OPENAI_API_KEY=       # /api/chat 답변 생성에 사용 (answer_service.py)
+UPSTAGE_API_KEY=      # PDF 추출 스크립트(extract_pdf.py)에서 사용
+```
+
+- `UPSTAGE_API_KEY`는 `extract_pdf.py`에서만 필요합니다. Upstage API 없이 추출하려면 `extract_pdf_withoutAPI.py`를 사용하고 이 값은 생략 가능합니다.
+- `backend/.env`는 `.gitignore`에 포함되어 커밋되지 않으니, 팀원마다 각자 로컬에 직접 만들어야 합니다.
 
 ### PDF → ChromaDB 데이터 적재
 
@@ -61,7 +68,7 @@ python scripts/extract_pdf.py data/raw/<파일명>.pdf   # 또는 extract_pdf_wi
 python app/services/rag_service.py                    # extracted.json을 ChromaDB에 적재
 ```
 
-서버 시작 시 ChromaDB가 비어 있으면 `backend/scripts/extracted.json`을 자동으로 적재합니다.
+서버 시작 시 ChromaDB가 비어 있으면 `backend/data/processed/extracted.json`을 자동으로 적재합니다.
 
 ## 프론트엔드 실행 방법
 
