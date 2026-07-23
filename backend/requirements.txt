@@ -6,5 +6,4 @@ pypdf
 requests
 python-dotenv
 openai
-python-dotenv
 sqlalchemy

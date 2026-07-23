@@ -11,6 +11,8 @@ backend/*.sqlite3
 backend/uploads/
 backend/**/__pycache__/
 *.pyc
+backend/data/processed/*
+!backend/data/processed/.gitkeep
 
 # Frontend
 frontend/node_modules/

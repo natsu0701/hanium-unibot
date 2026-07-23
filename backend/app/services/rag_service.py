@@ -24,7 +24,7 @@ COLLECTION_NAME = "school_regulations"
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 
 CHROMA_PATH = BACKEND_DIR / "chroma_db"
-DEFAULT_CHUNKS_PATH = BACKEND_DIR / "scripts" / "extracted.json"
+DEFAULT_CHUNKS_PATH = BACKEND_DIR / "data" / "processed" / "extracted.json"
 
 
 _model: SentenceTransformer | None = None
