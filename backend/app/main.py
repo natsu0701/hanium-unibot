@@ -6,11 +6,12 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
-from app.db import Base, SessionLocal, engine
+from app.db import Base, SessionLocal, engine, get_db
 from app.models import ChatLog
 from app.services.answer_service import generate_answer
 from app.services.rag_service import (
@@ -530,4 +531,89 @@ def chat(request: ChatRequest):
             "created_at": created_at,
         },
         "request_id": request_id,
+    }
+
+
+# =========================================================
+# 채팅 이력 조회 API
+# =========================================================
+
+@app.get("/api/chat/history")
+def chat_history(
+    user_id: str = Query(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="조회할 사용자 식별값",
+    ),
+    limit: int = Query(
+        default=20,
+        ge=1,
+        le=100,
+        description="반환할 최대 이력 수",
+    ),
+    conversation_id: UUID | None = Query(
+        default=None,
+        description="특정 대화만 필터링할 경우 사용",
+    ),
+    db: Session = Depends(get_db),
+):
+    """
+    /api/chat에서 SQLite에 저장된 채팅 이력을 조회합니다.
+
+    created_at 역순(최신순)으로 정렬하여 반환합니다.
+    """
+    try:
+        query = db.query(ChatLog).filter(
+            ChatLog.user_id == user_id
+        )
+
+        if conversation_id is not None:
+            query = query.filter(
+                ChatLog.conversation_id == str(conversation_id)
+            )
+
+        chat_logs = (
+            query
+            .order_by(ChatLog.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"채팅 이력 조회 중 오류가 발생했습니다: {exc}",
+        ) from exc
+
+    items = []
+
+    for chat_log in chat_logs:
+        try:
+            sources = json.loads(chat_log.sources_json)
+
+        except (TypeError, json.JSONDecodeError):
+            sources = []
+
+        items.append(
+            {
+                "id": chat_log.id,
+                "user_message": chat_log.user_message,
+                "bot_answer": chat_log.bot_answer,
+                "confidence": chat_log.confidence,
+                "sources": sources,
+                "created_at": (
+                    chat_log.created_at
+                    .isoformat()
+                    .replace("+00:00", "Z")
+                ),
+            }
+        )
+
+    return {
+        "data": {
+            "count": len(items),
+            "items": items,
+        },
+        "request_id": f"req_{uuid4().hex}",
     }
