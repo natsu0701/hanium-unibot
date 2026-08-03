@@ -624,6 +624,11 @@ def chat_history(
         le=100,
         description="반환할 최대 이력 수",
     ),
+    page: int = Query(
+        default=1,
+        ge=1,
+        description="조회할 페이지 번호 (1부터 시작)",
+    ),
     conversation_id: UUID | None = Query(
         default=None,
         description="특정 대화만 필터링할 경우 사용",
@@ -645,10 +650,15 @@ def chat_history(
                 ChatLog.conversation_id
                 == str(conversation_id)
             )
+        
+        total_count = query.count()
 
+        offset = (page - 1) * limit
+        
         chat_logs = (
             query
             .order_by(ChatLog.created_at.desc())
+            .offset(offset)
             .limit(limit)
             .all()
         )
@@ -700,10 +710,13 @@ def chat_history(
             }
         )
 
+    has_more = offset + len(items) < total_count
+
     return {
         "data": {
             "count": len(items),
             "items": items,
+            "has_more": has_more,
         },
         "request_id": f"req_{uuid4().hex}",
     }
