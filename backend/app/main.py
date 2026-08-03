@@ -2,16 +2,28 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from pathlib import Path
 from uuid import UUID, uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    File,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
-from app.db import Base, SessionLocal, engine
-from app.models import ChatLog
+from app.db import BACKEND_DIR, Base, SessionLocal, engine, get_db
+from app.models import ChatLog, Document
 from app.services.answer_service import generate_answer
 from app.services.rag_service import (
     DEFAULT_CHUNKS_PATH,
@@ -21,6 +33,11 @@ from app.services.rag_service import (
 )
 
 
+RAW_DIR = BACKEND_DIR / "data" / "raw"
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+UPLOAD_CHUNK_SIZE = 1024 * 1024
+
+
 # =========================================================
 # 공통 함수
 # =========================================================
@@ -28,6 +45,62 @@ from app.services.rag_service import (
 def utc_now() -> str:
     """현재 UTC 시간을 ISO 형식 문자열로 반환합니다."""
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
+def format_utc(value: datetime) -> str:
+    """datetime을 UTC ISO 문자열로 변환합니다."""
+    if value.tzinfo is None:
+        return value.isoformat() + "Z"
+
+    return value.isoformat().replace("+00:00", "Z")
+
+
+def document_to_dict(document: Document) -> dict:
+    """Document ORM 객체를 API 응답 형식으로 변환합니다."""
+    return {
+        "id": document.id,
+        "filename": document.filename,
+        "size_bytes": document.size_bytes,
+        "status": document.status,
+        "chunks_count": document.chunks_count,
+        "upload_time": format_utc(document.upload_time),
+    }
+
+
+def process_document(doc_id: str) -> None:
+    """
+    업로드된 PDF 처리 파이프라인 자리표시자입니다.
+
+    W4 후반에 예진님 OCR/청킹 파이프라인으로 교체합니다.
+    """
+    db = SessionLocal()
+
+    try:
+        document = (
+            db.query(Document)
+            .filter(Document.id == doc_id)
+            .first()
+        )
+
+        if document is None:
+            return
+
+        document.status = "processing"
+        db.commit()
+
+        time.sleep(5)
+
+        document.status = "completed"
+        db.commit()
+
+    except Exception as exc:
+        db.rollback()
+        print(
+            f"문서 처리 중 오류 발생 ({doc_id}): {exc}"
+        )
+
+    finally:
+        db.close()
 
 
 def clean_text(text: str) -> str:
@@ -530,4 +603,295 @@ def chat(request: ChatRequest):
             "created_at": created_at,
         },
         "request_id": request_id,
+    }
+
+
+# =========================================================
+# 채팅 이력 조회 API
+# =========================================================
+
+@app.get("/api/chat/history")
+def chat_history(
+    user_id: str = Query(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="조회할 사용자 식별값",
+    ),
+    limit: int = Query(
+        default=20,
+        ge=1,
+        le=100,
+        description="반환할 최대 이력 수",
+    ),
+    conversation_id: UUID | None = Query(
+        default=None,
+        description="특정 대화만 필터링할 경우 사용",
+    ),
+    db: Session = Depends(get_db),
+):
+    """
+    /api/chat에서 SQLite에 저장된 채팅 이력을 조회합니다.
+
+    created_at 역순(최신순)으로 정렬하여 반환합니다.
+    """
+    try:
+        query = db.query(ChatLog).filter(
+            ChatLog.user_id == user_id
+        )
+
+        if conversation_id is not None:
+            query = query.filter(
+                ChatLog.conversation_id
+                == str(conversation_id)
+            )
+
+        chat_logs = (
+            query
+            .order_by(ChatLog.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "채팅 이력 조회 중 오류가 발생했습니다: "
+                f"{exc}"
+            ),
+        ) from exc
+
+    items = []
+
+    for chat_log in chat_logs:
+        try:
+            sources = json.loads(
+                chat_log.sources_json
+            )
+
+        except (TypeError, json.JSONDecodeError):
+            sources = []
+
+        if not isinstance(sources, list):
+            sources = []
+
+        created_at = chat_log.created_at
+
+        if created_at.tzinfo is None:
+            created_at_str = (
+                created_at.isoformat() + "Z"
+            )
+        else:
+            created_at_str = (
+                created_at
+                .isoformat()
+                .replace("+00:00", "Z")
+            )
+
+        items.append(
+            {
+                "id": chat_log.id,
+                "user_message": chat_log.user_message,
+                "bot_answer": chat_log.bot_answer,
+                "confidence": chat_log.confidence,
+                "sources": sources,
+                "created_at": created_at_str,
+            }
+        )
+
+    return {
+        "data": {
+            "count": len(items),
+            "items": items,
+        },
+        "request_id": f"req_{uuid4().hex}",
+    }
+
+
+# =========================================================
+# PDF 문서 업로드 / 목록 API
+# =========================================================
+
+@app.post(
+    "/api/documents",
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_document(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """
+    PDF 문서를 업로드하고 처리 파이프라인을 백그라운드에서 시작합니다.
+    """
+    original_filename = (
+        file.filename or ""
+    ).strip()
+
+    content_type = (
+        file.content_type or ""
+    ).lower()
+
+    is_pdf_name = original_filename.lower().endswith(
+        ".pdf"
+    )
+    is_pdf_type = content_type in {
+        "application/pdf",
+        "application/x-pdf",
+    }
+
+    if not (is_pdf_name or is_pdf_type):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "UNSUPPORTED_FILE_TYPE",
+                "message": "PDF 파일만 업로드할 수 있습니다.",
+            },
+        )
+
+    doc_id = str(uuid4())
+    RAW_DIR.mkdir(parents=True, exist_ok=True)
+    save_path = RAW_DIR / f"{doc_id}.pdf"
+
+    size_bytes = 0
+
+    try:
+        with save_path.open("wb") as output:
+            while True:
+                chunk = await file.read(
+                    UPLOAD_CHUNK_SIZE
+                )
+
+                if not chunk:
+                    break
+
+                size_bytes += len(chunk)
+
+                if size_bytes > MAX_UPLOAD_BYTES:
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail={
+                            "code": "FILE_TOO_LARGE",
+                            "message": (
+                                "파일 크기는 50MB를 "
+                                "초과할 수 없습니다."
+                            ),
+                        },
+                    )
+
+                output.write(chunk)
+
+    except HTTPException:
+        if save_path.exists():
+            save_path.unlink()
+
+        raise
+
+    except Exception as exc:
+        if save_path.exists():
+            save_path.unlink()
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "파일 저장 중 오류가 발생했습니다: "
+                f"{exc}"
+            ),
+        ) from exc
+
+    finally:
+        await file.close()
+
+    if size_bytes == 0:
+        if save_path.exists():
+            save_path.unlink()
+
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "UNSUPPORTED_FILE_TYPE",
+                "message": "빈 파일은 업로드할 수 없습니다.",
+            },
+        )
+
+    filename = (
+        Path(original_filename).name
+        if original_filename
+        else f"{doc_id}.pdf"
+    )
+
+    if not filename.lower().endswith(".pdf"):
+        filename = f"{filename}.pdf"
+
+    document = Document(
+        id=doc_id,
+        filename=filename,
+        size_bytes=size_bytes,
+        status="pending",
+        chunks_count=None,
+    )
+
+    try:
+        db.add(document)
+        db.commit()
+        db.refresh(document)
+
+    except Exception as exc:
+        db.rollback()
+
+        if save_path.exists():
+            save_path.unlink()
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "문서 메타데이터 저장 중 오류가 "
+                f"발생했습니다: {exc}"
+            ),
+        ) from exc
+
+    background_tasks.add_task(
+        process_document,
+        doc_id,
+    )
+
+    return {
+        "data": document_to_dict(document),
+        "request_id": f"req_{uuid4().hex}",
+    }
+
+
+@app.get("/api/documents")
+def list_documents(
+    db: Session = Depends(get_db),
+):
+    """업로드된 문서를 upload_time 역순으로 조회합니다."""
+    try:
+        documents = (
+            db.query(Document)
+            .order_by(Document.upload_time.desc())
+            .all()
+        )
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "문서 목록 조회 중 오류가 발생했습니다: "
+                f"{exc}"
+            ),
+        ) from exc
+
+    items = [
+        document_to_dict(document)
+        for document in documents
+    ]
+
+    return {
+        "data": {
+            "count": len(items),
+            "items": items,
+        },
+        "request_id": f"req_{uuid4().hex}",
     }
