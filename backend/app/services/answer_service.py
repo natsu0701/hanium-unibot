@@ -411,16 +411,16 @@ def generate_answer(
         )
 
     if not search_results:
-     return {
-        "answer": (
-            "제공된 학사규정에서 해당 질문을 "
-            "뒷받침할 근거를 찾기 어렵습니다."
-        ),
-        "used_source_indexes": [],
-        "confidence": 0.0,
-        "verification_score": 0.0,
-        "rejection_reason": "unsupported",
-    }
+        return {
+            "answer": (
+                "제공된 학사규정에서 해당 질문을 "
+                "뒷받침할 근거를 찾기 어렵습니다."
+            ),
+            "used_source_indexes": [],
+            "confidence": 0.0,
+            "verification_score": 0.0,
+            "rejection_reason": "unsupported",
+        }
 
     client = get_openai_client()
     context = build_context(

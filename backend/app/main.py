@@ -283,14 +283,14 @@ async def lifespan(_: FastAPI):
         Base.metadata.create_all(
             bind=engine
         )
-
+        
         print(
-            "[INFO}SQLite 테이블 초기화 완료"
+            "[INFO] SQLite 테이블 초기화 완료"
         )
 
     except Exception as exc:
         print(
-            f"{ERROR}SQLite 초기화 중 오류 발생: {exc}"
+            f"[ERROR] SQLite 초기화 중 오류 발생: {exc}"
         )
      # 임베딩 모델 warm-up
     try:
@@ -592,19 +592,18 @@ def chat(request: ChatRequest):
         verification_score = float(
             generated.get(
                 "verification_score",
-                 confidence,
+                confidence,
+            )
         )
-    )
     except (TypeError, ValueError):
         verification_score = confidence
 
     verification_score = max(
-         0.0,
+        0.0,
         min(verification_score, 1.0),
-)
+    )
 
     # 최종 채팅 결과를 SQLite에 저장합니다.
-        # 최종 채팅 결과를 SQLite에 저장합니다.
     try:
         save_chat_log(
             user_id=request.user_id,
