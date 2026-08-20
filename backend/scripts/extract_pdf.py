@@ -32,10 +32,12 @@ import time
 from dotenv import load_dotenv
 
 # json파일 저장 위치 지정
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-output_dir = os.path.join(BASE_DIR, "..", "data", "processed")
-os.makedirs(output_dir, exist_ok=True)
-output_path = os.path.join(output_dir, "extracted.json")
+# 기본 경로 설정
+# school_id는 main()에서 명령어 인자를 읽은 뒤에 결정된다.
+BASE_DIR = os.path.dirname(
+    os.path.abspath(__file__)
+)
+
 
 # .env 파일 읽기 (backend/.env)
 load_dotenv(os.path.join(BASE_DIR, "..", ".env"))
@@ -130,26 +132,29 @@ def extract_article(text: str):
     return None, None
 
 
-def build_doc_id(filename: str) -> str:
+def build_doc_id(
+    filename: str,
+    school_id: str,
+) -> str:
     """
-    건국대학교_학칙.pdf
+    파일명과 학교 식별자로 문서 ID를 생성합니다.
 
-    →
+    예:
+    school_id = "konkuk"
+    filename = "guide.pdf"
 
-    konkuk-regulation (예시)
-
-    현재는 파일명 기반으로 생성
+    결과:
+    konkuk-guide
     """
-
     name = os.path.splitext(filename)[0]
 
-    doc_id = (
+    filename_slug = (
         name.lower()
         .replace(" ", "-")
         .replace("_", "-")
     )
 
-    return doc_id
+    return f"{school_id}-{filename_slug}"
 
 def parse_pdf_with_upstage(pdf_path: str):
 
@@ -208,12 +213,18 @@ def split_pdf(pdf_path, chunk_size=100):
     return chunks
 
 
-def extract_pdf(pdf_path: str):
+def extract_pdf(
+    pdf_path: str,
+    school_id: str,
+):
 
     response = parse_pdf_with_upstage(pdf_path)
 
     doc_name = os.path.basename(pdf_path)
-    doc_id = build_doc_id(doc_name)
+    doc_id = build_doc_id(
+        doc_name,
+        school_id,
+    )
 
     results = []
     seen_pages = set()
@@ -305,6 +316,8 @@ def extract_pdf(pdf_path: str):
 
             "doc_name": doc_name,
 
+            "school_id": school_id,
+
             "chapter": current_chapter,
 
             "chapter_title": current_chapter_title,
@@ -313,7 +326,7 @@ def extract_pdf(pdf_path: str):
 
             "article_title": current_article_title,
 
-            "is_table": is_table
+            "is_table": is_table,
         }
 
         results.append(record)
@@ -338,31 +351,70 @@ def main():
     # 인자 확인
     # -----------------------------
 
-    if len(sys.argv) < 2:
-
+    if len(sys.argv) < 4:
         print(
             "사용법:",
-            file=sys.stderr
+            file=sys.stderr,
         )
 
         print(
-            "python 01_extract_pdf.py <pdf파일>",
-            file=sys.stderr
+            (
+                "python 01_extract_pdf.py "
+                "<pdf파일> --school-id <학교ID>"
+            ),
+            file=sys.stderr,
         )
 
         print(
             "예시:",
-            file=sys.stderr
+            file=sys.stderr,
         )
 
         print(
-            "python 01_extract_pdf.py data/학칙.pdf > extracted.json",
-            file=sys.stderr
+            (
+                "python 01_extract_pdf.py "
+                "data/학칙.pdf --school-id konkuk"
+            ),
+            file=sys.stderr,
         )
 
         sys.exit(1)
 
     pdf_path = sys.argv[1]
+
+    if sys.argv[2] != "--school-id":
+        print(
+            "--school-id 옵션이 필요합니다.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    school_id = sys.argv[3].strip()
+
+    if not school_id:
+        print(
+            "school_id 값이 비어 있습니다.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    school_output_dir = os.path.join(
+        BASE_DIR,
+        "..",
+        "data",
+        "processed",
+        school_id,
+    )
+
+    os.makedirs(
+        school_output_dir,
+        exist_ok=True,
+    )
+
+    school_output_path = os.path.join(
+        school_output_dir,
+        "extracted.json",
+    )    
 
     all_pages = []
 
@@ -371,14 +423,21 @@ def main():
     for i, (chunk, start_page) in enumerate(chunks):
         print(f"{i+1}/{len(chunks)} 번째 PDF 처리 중...", file=sys.stderr)
 
-        pages = extract_pdf(chunk)
+        pages = extract_pdf(
+            chunk,
+            school_id,
+        )
 
         for p in pages:
             p["page"] += start_page  # ⭐ chunk 기준 보정
 
         all_pages.extend(pages)
 
-    with open(output_path, "w", encoding="utf-8") as f:
+    with open(
+        school_output_path,
+        "w",
+        encoding="utf-8",
+    ) as f:
         json.dump(
             all_pages,
             f,
@@ -386,7 +445,7 @@ def main():
             indent=2
         )
 
-    print(f"저장 완료: {output_path}")
+    print(f"저장 완료: {school_output_path}")
 
 
 if __name__ == "__main__":

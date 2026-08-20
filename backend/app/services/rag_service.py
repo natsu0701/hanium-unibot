@@ -195,6 +195,9 @@ def build_metadata(
         "doc_name": str(
             chunk.get("doc_name") or ""
         ),
+        "school_id": str(
+            chunk.get("school_id") or ""
+        ),
         "chapter": str(
             chunk.get("chapter") or ""
         ),
@@ -401,6 +404,7 @@ def search(
     n_results: int = 3,
     *,
     min_score: float = 0.20,
+    school_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """
     사용자 질문과 관련된 청크를 반환합니다.
@@ -433,14 +437,23 @@ def search(
         normalize_embeddings=True,
     ).tolist()
 
-    raw_results = collection.query(
-        query_embeddings=[query_vector],
-        n_results=candidate_count,
-        include=[
+    query_kwargs: dict[str, Any] = {
+        "query_embeddings": [query_vector],
+        "n_results": candidate_count,
+        "include": [
             "documents",
             "metadatas",
             "distances",
         ],
+    }
+
+    if school_id:
+        query_kwargs["where"] = {
+            "school_id": school_id,
+        }
+
+    raw_results = collection.query(
+        **query_kwargs,
     )
 
     documents = (
@@ -499,6 +512,9 @@ def search(
                 ),
                 "doc_name": str(
                     metadata.get("doc_name") or ""
+                ),
+                "school_id": str(
+                    metadata.get("school_id") or ""
                 ),
                 "chapter": str(
                     metadata.get("chapter") or ""
