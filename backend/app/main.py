@@ -8,6 +8,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID, uuid4
 
+from dotenv import load_dotenv
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parents[2]  # backend 폴더
+load_dotenv(BASE_DIR / ".env")
+
 from fastapi import (
     BackgroundTasks,
     Depends,
@@ -30,6 +36,7 @@ from app.services.rag_service import (
     collection_count,
     ingest_json,
     search,
+    get_model,  # warm-up용으로 추가
 )
 
 
@@ -242,6 +249,10 @@ def save_chat_log(
         )
 
         db.add(chat_log)
+
+         #테스트용: 항상 실패를 발생시키기
+         #raise RuntimeError("테스트용 강제 채팅 로그 저장 실패")
+    
         db.commit()
 
     except Exception:
@@ -262,8 +273,9 @@ async def lifespan(_: FastAPI):
     서버 시작 시 다음 작업을 수행합니다.
 
     1. SQLite 테이블 생성
-    2. ChromaDB 데이터 상태 확인
-    3. ChromaDB가 비어 있으면 processed JSON 자동 적재
+    2. 임베딩 모델 warm-up
+    3. ChromaDB 데이터 상태 확인
+    4. ChromaDB가 비어 있으면 processed JSON 자동 적재
     """
 
     # SQLite 테이블을 생성합니다.
@@ -271,15 +283,22 @@ async def lifespan(_: FastAPI):
         Base.metadata.create_all(
             bind=engine
         )
-
+        
         print(
-            "SQLite 테이블 초기화 완료"
+            "[INFO] SQLite 테이블 초기화 완료"
         )
 
     except Exception as exc:
         print(
-            f"SQLite 초기화 중 오류 발생: {exc}"
+            f"[ERROR] SQLite 초기화 중 오류 발생: {exc}"
         )
+     # 임베딩 모델 warm-up
+    try:
+        print("[INFO]임베딩 모델 warm-up 시작...")
+        get_model()  # rag_service의 임베딩 모델을 미리 로드
+        print("[INFO]임베딩 모델 준비 완료")
+    except Exception as exc:
+        print(f"[ERROR]임베딩 모델 warm-up 중 오류 발생: {exc}")
 
     # ChromaDB를 확인합니다.
     try:
@@ -288,7 +307,7 @@ async def lifespan(_: FastAPI):
         if current_count == 0:
             if DEFAULT_CHUNKS_PATH.exists():
                 print(
-                    "ChromaDB가 비어 있어 데이터를 적재합니다: "
+                    "[INFO]ChromaDB가 비어 있어 데이터를 적재합니다: "
                     f"{DEFAULT_CHUNKS_PATH}"
                 )
 
@@ -298,19 +317,19 @@ async def lifespan(_: FastAPI):
                 )
 
                 print(
-                    "ChromaDB 데이터 적재 완료: "
+                    "[INFO]ChromaDB 데이터 적재 완료: "
                     f"{inserted_count}개"
                 )
 
             else:
                 print(
-                    "경고: 청크 JSON 파일을 찾을 수 없습니다. "
+                    "[WARN]청크 JSON 파일을 찾을 수 없습니다. "
                     f"경로: {DEFAULT_CHUNKS_PATH}"
                 )
 
         else:
             print(
-                "기존 ChromaDB 데이터를 사용합니다: "
+                "[INFO]기존 ChromaDB 데이터를 사용합니다: "
                 f"{current_count}개"
             )
 
@@ -318,7 +337,7 @@ async def lifespan(_: FastAPI):
         # RAG 초기화가 실패하더라도 서버 상태 확인은
         # 가능하도록 서버 전체 실행은 유지합니다.
         print(
-            f"RAG 초기화 중 오류 발생: {exc}"
+            f"[ERROR]RAG 초기화 중 오류 발생: {exc}"
         )
 
     yield
@@ -486,7 +505,7 @@ def chat(request: ChatRequest):
         or uuid4()
     )
     request_id = f"req_{uuid4().hex}"
-
+    rejection_reason: str | None = None  # 미리 초기화 추가
     try:
         # 1. 질문과 관련된 문서 청크를 검색합니다.
         search_results = search(
@@ -494,13 +513,14 @@ def chat(request: ChatRequest):
             n_results=3,
             min_score=0.20,
         )
-
+    
         # 2. 검색 결과를 OpenAI에 전달해
         # 최종 답변을 생성합니다.
         generated = generate_answer(
             question=request.message,
             search_results=search_results,
         )
+        
 
     except RuntimeError as exc:
         raise HTTPException(
@@ -550,6 +570,8 @@ def chat(request: ChatRequest):
         generated.get("answer")
         or "답변을 생성하지 못했습니다."
     ).strip()
+    # 새로 추가: rejection_reason 읽기
+    rejection_reason = generated.get("rejection_reason")
 
     try:
         confidence = float(
@@ -566,6 +588,20 @@ def chat(request: ChatRequest):
         0.0,
         min(confidence, 1.0),
     )
+    try:
+        verification_score = float(
+            generated.get(
+                "verification_score",
+                confidence,
+            )
+        )
+    except (TypeError, ValueError):
+        verification_score = confidence
+
+    verification_score = max(
+        0.0,
+        min(verification_score, 1.0),
+    )
 
     # 최종 채팅 결과를 SQLite에 저장합니다.
     try:
@@ -581,29 +617,27 @@ def chat(request: ChatRequest):
         )
 
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                "답변은 생성되었지만 채팅 이력 저장 중 "
-                f"오류가 발생했습니다: {exc}"
-            ),
-        ) from exc
+        # 로그 저장 실패는 사용자 응답에 영향을 주지 않고,
+        # 서버 콘솔에만 경고로 남깁니다.
+        print(
+            f"[WARN]경고: 채팅 이력 저장 실패 (사용자에게는 답변 정상 반환): {exc}"
+        )
 
     created_at = utc_now()
 
     return {
-        "data": {
-            "answer": answer,
-            "sources": sources,
-            "confidence": confidence,
-            "conversation_id": str(
-                conversation_id
-            ),
-            "message_id": message_id,
-            "created_at": created_at,
-        },
-        "request_id": request_id,
-    }
+    "data": {
+        "answer": answer,
+        "sources": sources,
+        "confidence": confidence,
+        "verification_score": verification_score,
+        "rejection_reason": rejection_reason,
+        "conversation_id": str(conversation_id),
+        "message_id": message_id,
+        "created_at": created_at,
+    },
+    "request_id": request_id,
+}
 
 
 # =========================================================

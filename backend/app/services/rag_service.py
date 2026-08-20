@@ -484,8 +484,8 @@ def search(
         )
 
         final_score = (
-            semantic_score * 0.85
-            + keyword_score * 0.15
+            semantic_score * 0.5
+            + keyword_score * 0.5
         )
 
         candidates.append(
