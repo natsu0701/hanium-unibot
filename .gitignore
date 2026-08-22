@@ -1,15 +1,18 @@
 # Backend
-backend/.env
-backend/.env/
+.env
+**/.env
 backend/.venv/
 backend/chroma_db/
 backend/chroma.sqlite3
+backend/scripts/extracted.json
 backend/*.db
 backend/*.sqlite
 backend/*.sqlite3
 backend/uploads/
 backend/**/__pycache__/
 *.pyc
+backend/data/processed/*
+!backend/data/processed/.gitkeep
 
 # Frontend
 frontend/node_modules/
@@ -24,6 +27,12 @@ uni-bot/dist/
 # OS
 .DS_Store
 Thumbs.db
+.vscode
 
 # Logs
 *.log
+
+backend/unibot.db
+backend/*.db
+backend/*.sqlite
+backend/*.sqlite3

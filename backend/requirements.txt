@@ -1,3 +1,9 @@
 fastapi
 uvicorn[standard]
 chromadb
+sentence-transformers
+pypdf
+requests
+python-dotenv
+openai
+sqlalchemy

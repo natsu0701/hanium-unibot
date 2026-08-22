@@ -31,8 +31,14 @@ import time
 
 from dotenv import load_dotenv
 
-# .env 파일 읽기
-load_dotenv()
+# json파일 저장 위치 지정
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+output_dir = os.path.join(BASE_DIR, "..", "data", "processed")
+os.makedirs(output_dir, exist_ok=True)
+output_path = os.path.join(output_dir, "extracted.json")
+
+# .env 파일 읽기 (backend/.env)
+load_dotenv(os.path.join(BASE_DIR, "..", ".env"))
 
 # API Key 읽기
 API_KEY = os.getenv("UPSTAGE_API_KEY")
@@ -371,8 +377,6 @@ def main():
             p["page"] += start_page  # ⭐ chunk 기준 보정
 
         all_pages.extend(pages)
-
-    output_path = "extracted.json"
 
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(

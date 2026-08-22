@@ -5,6 +5,7 @@ import {
   Lightbulb,
   Search as SearchIcon,
 } from 'lucide-react'
+
 import AdminDashboard from './pages/AdminDashboard'
 import ChatScreen from './components/ChatScreen'
 import Home from './pages/Home'
@@ -24,13 +25,66 @@ function App() {
   const [regulationBrowserOpen, setRegulationBrowserOpen] = useState(false)
   const [studentPdfFile, setStudentPdfFile] = useState(null)
   const [pdfPage, setPdfPage] = useState(1)
+  const [pdfHighlightText, setPdfHighlightText] = useState('')
 
   const isStudentView = currentUser !== 'admin'
 
   useEffect(() => {
-    if (currentUser !== 'konkuk' && currentUser !== 'yonsei') return
+    if (currentUser !== 'konkuk' && currentUser !== 'yonsei') {
+      return
+    }
+
     setStudentPdfFile(null)
+    setPdfPage(1)
+    setPdfHighlightText('')
   }, [currentUser])
+
+  const handleSourceClick = (source) => {
+    const parsedPage = Number(source?.page)
+
+    if (
+      !Number.isFinite(parsedPage) ||
+      !Number.isInteger(parsedPage) ||
+      parsedPage < 1
+    ) {
+      return
+    }
+
+    const evidence =
+      typeof source?.evidence === 'string'
+        ? source.evidence.trim()
+        : ''
+
+    setPdfPage(parsedPage)
+    setPdfHighlightText(evidence)
+  }
+
+  const handleDocumentSelect = ({ file }) => {
+    setStudentPdfFile(file)
+    setPdfPage(1)
+    setPdfHighlightText('')
+  }
+
+  const handleSchoolSelect = (schoolId) => {
+    setCurrentUser(schoolId)
+    setStudentPdfFile(null)
+    setPdfPage(1)
+    setPdfHighlightText('')
+    setIsChatStarted(true)
+  }
+
+  const handleUserChange = (event) => {
+    const nextUser = event.target.value
+
+    setCurrentUser(nextUser)
+    setRegulationBrowserOpen(false)
+
+    if (nextUser === 'admin') {
+      setStudentPdfFile(null)
+      setPdfPage(1)
+      setPdfHighlightText('')
+    }
+  }
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
@@ -38,18 +92,32 @@ function App() {
         <>
           <header className="relative flex h-14 w-full shrink-0 items-center justify-between gap-3 bg-[#8B5CF6] px-4 text-white">
             <div className="flex min-w-0 items-center gap-2">
-              <GraduationCap className="hidden shrink-0 sm:block" size={22} {...LINE_ICON} />
+              <GraduationCap
+                className="hidden shrink-0 sm:block"
+                size={22}
+                {...LINE_ICON}
+              />
+
               <p className="truncate font-bold">Uni-Bot</p>
+
               <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-[#8B5CF6]">
                 Self-RAG
               </span>
             </div>
+
             <div className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 px-4 lg:block">
               <span className="flex items-center gap-2 whitespace-nowrap rounded-full bg-white/15 px-4 py-1.5 text-xs font-medium backdrop-blur-sm">
-                <Lightbulb size={14} {...LINE_ICON} className="shrink-0 text-amber-200" aria-hidden />
+                <Lightbulb
+                  size={14}
+                  {...LINE_ICON}
+                  className="shrink-0 text-amber-200"
+                  aria-hidden
+                />
+
                 <span>Self-RAG 기반 학사 규정 AI 검색 플랫폼</span>
               </span>
             </div>
+
             <div className="flex shrink-0 items-center gap-2">
               {isStudentView && (
                 <>
@@ -62,9 +130,10 @@ function App() {
                     <FileText size={16} {...LINE_ICON} />
                     <span className="hidden sm:inline">규정 목록</span>
                   </button>
+
                   <button
                     type="button"
-                    title="PDF 뷰어에서 검색 (상단 헤더)"
+                    title="PDF 뷰어에서 검색"
                     className="inline-flex items-center gap-1.5 rounded-md bg-white/20 px-3 py-1.5 text-sm transition hover:bg-white/30"
                   >
                     <SearchIcon size={16} {...LINE_ICON} />
@@ -72,30 +141,38 @@ function App() {
                   </button>
                 </>
               )}
+
               <select
                 value={currentUser}
-                onChange={(event) => setCurrentUser(event.target.value)}
+                onChange={handleUserChange}
                 className="max-w-[10rem] rounded-md bg-white/20 py-1.5 pl-2 pr-8 text-xs text-white outline-none ring-1 ring-white/30 sm:max-w-none sm:pr-10 sm:text-sm"
               >
                 {USERS.map((user) => (
-                  <option key={user.value} value={user.value} className="text-slate-800">
+                  <option
+                    key={user.value}
+                    value={user.value}
+                    className="text-slate-800"
+                  >
                     {user.label}
                   </option>
                 ))}
               </select>
             </div>
           </header>
+
           <main className="flex h-full min-h-0 w-full flex-1 overflow-hidden">
             {currentUser === 'admin' ? (
               <AdminDashboard />
             ) : (
               <div className="flex h-full min-h-0 w-full flex-1 flex-row overflow-hidden">
                 <div className="flex min-h-0 w-1/2 flex-col overflow-hidden border-r border-slate-200">
-                  <ChatScreen onSourceClick={(page) => setPdfPage(page)} />
+                  <ChatScreen onSourceClick={handleSourceClick} />
                 </div>
+
                 <div className="flex min-h-0 w-1/2 flex-col overflow-hidden">
                   <PdfViewer
                     targetPage={pdfPage}
+                    highlightText={pdfHighlightText}
                     currentUser={currentUser}
                     activePdfFile={studentPdfFile}
                     onPdfFileChange={setStudentPdfFile}
@@ -109,17 +186,11 @@ function App() {
             open={regulationBrowserOpen && isStudentView}
             currentUser={currentUser}
             onClose={() => setRegulationBrowserOpen(false)}
-            onSelectDocument={({ file }) => setStudentPdfFile(file)}
+            onSelectDocument={handleDocumentSelect}
           />
         </>
       ) : (
-        <Home
-          onSelectSchool={(schoolId) => {
-            setCurrentUser(schoolId)
-            setStudentPdfFile(null)
-            setIsChatStarted(true)
-          }}
-        />
+        <Home onSelectSchool={handleSchoolSelect} />
       )}
     </div>
   )
