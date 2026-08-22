@@ -13,7 +13,6 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
  * @returns {Promise<{ answer: string, sources: { page: number, text: string }[] }>}
  */
 export async function sendChatMessage(message) {
-  // 실제 네트워크 지연을 흉내 내기 위한 1초 딜레이
   await delay(MOCK_DELAY_MS)
 
   return {

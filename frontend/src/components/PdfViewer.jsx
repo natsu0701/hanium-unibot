@@ -24,12 +24,9 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 
 const SCHOOL_OPTIONS = [
   {
+    id: 'konkuk',
     label: '건국대학교 글로컬캠퍼스',
     file: '/guide.pdf',
-  },
-  {
-    label: '연세대학교',
-    file: '/guide2.pdf',
   },
 ]
 
@@ -45,6 +42,7 @@ function PdfViewer({
   highlightText = '',
   currentUser = 'konkuk',
   activePdfFile = null,
+  activePdfTitle = '',
   onPdfFileChange,
 }) {
   const selectedSchool = useMemo(() => {
@@ -58,12 +56,22 @@ function PdfViewer({
       }
     }
 
-    return currentUser === 'yonsei'
-      ? SCHOOL_OPTIONS[1]
-      : SCHOOL_OPTIONS[0]
+    return (
+      SCHOOL_OPTIONS.find((school) => school.id === currentUser) ??
+      SCHOOL_OPTIONS[0]
+    )
   }, [currentUser, activePdfFile])
 
-  const fileUrl = activePdfFile ?? selectedSchool.file
+  const fileUrl = activePdfFile ?? selectedSchool?.file
+  const isRemotePdf =
+    typeof fileUrl === 'string' && /^https?:\/\//i.test(fileUrl)
+  const headerTitle =
+    activePdfTitle ||
+    selectedSchool?.label ||
+    '학사 요람'
+  const pdfSource = isRemotePdf
+    ? { url: fileUrl, withCredentials: false }
+    : fileUrl
 
   const [numPages, setNumPages] = useState(null)
   const [pageNumber, setPageNumber] = useState(1)
@@ -344,31 +352,35 @@ function PdfViewer({
         <div className="flex items-center gap-3 px-4 py-3">
           <div className="min-w-0 flex-1">
             <div className="relative min-w-0 max-w-xs rounded-lg border border-slate-200 bg-white px-3 py-2">
-              <p className="truncate pr-8 text-sm font-medium text-slate-700">
-                {selectedSchool.label}
+              <p className={`truncate text-sm font-medium text-slate-700 ${isRemotePdf ? '' : 'pr-8'}`}>
+                {headerTitle}
               </p>
 
-              <ChevronDown
-                className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-slate-400"
-                aria-hidden
-                {...LINE_ICON}
-              />
+              {isRemotePdf ? null : (
+                <>
+                  <ChevronDown
+                    className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-slate-400"
+                    aria-hidden
+                    {...LINE_ICON}
+                  />
 
-              <select
-                value={selectedSchool.file}
-                onChange={handleSchoolChange}
-                className="absolute inset-0 cursor-pointer opacity-0"
-                aria-label="학교 선택"
-              >
-                {SCHOOL_OPTIONS.map((school) => (
-                  <option
-                    key={school.file}
-                    value={school.file}
+                  <select
+                    value={selectedSchool?.file ?? ''}
+                    onChange={handleSchoolChange}
+                    className="absolute inset-0 cursor-pointer opacity-0"
+                    aria-label="학교 선택"
                   >
-                    {school.label}
-                  </option>
-                ))}
-              </select>
+                    {SCHOOL_OPTIONS.map((school) => (
+                      <option
+                        key={school.file}
+                        value={school.file}
+                      >
+                        {school.label}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
             </div>
           </div>
 
@@ -400,7 +412,7 @@ function PdfViewer({
       >
         <div className="mx-auto flex w-full max-w-3xl justify-center">
           <Document
-            file={fileUrl}
+            file={pdfSource}
             onLoadSuccess={handleLoadSuccess}
             loading={
               <div className="py-20 text-center text-sm text-slate-500">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   FileText,
   GraduationCap,
@@ -11,33 +11,64 @@ import ChatScreen from './components/ChatScreen'
 import Home from './pages/Home'
 import PdfViewer from './components/PdfViewer'
 import RegulationBrowser from './pages/RegulationBrowser'
+import { fetchSchools } from './api/schoolApi'
 import { LINE_ICON } from './constants/iconProps'
 
-const USERS = [
-  { label: '건국대 학생 (konkuk)', value: 'konkuk' },
-  { label: '연세대 학생 (yonsei)', value: 'yonsei' },
-  { label: '관리자 (admin)', value: 'admin' },
+const ROLE_OPTIONS = [
+  { label: '학생', value: 'student' },
+  { label: '관리자', value: 'admin' },
 ]
 
 function App() {
   const [isChatStarted, setIsChatStarted] = useState(false)
-  const [currentUser, setCurrentUser] = useState('konkuk')
+  const [role, setRole] = useState('student')
+  const [schools, setSchools] = useState([])
+  const [schoolsLoading, setSchoolsLoading] = useState(true)
+  const [schoolsError, setSchoolsError] = useState('')
+  const [currentSchoolId, setCurrentSchoolId] = useState(null)
   const [regulationBrowserOpen, setRegulationBrowserOpen] = useState(false)
   const [studentPdfFile, setStudentPdfFile] = useState(null)
+  const [studentPdfTitle, setStudentPdfTitle] = useState('')
   const [pdfPage, setPdfPage] = useState(1)
   const [pdfHighlightText, setPdfHighlightText] = useState('')
 
-  const isStudentView = currentUser !== 'admin'
+  const lastStudentSchoolIdRef = useRef(null)
+
+  const isStudentView = role !== 'admin'
+  const currentSchool = schools.find((school) => school.id === currentSchoolId)
+  const currentSchoolName = currentSchool?.name ?? ''
+
+  const loadSchools = async () => {
+    setSchoolsLoading(true)
+    setSchoolsError('')
+
+    try {
+      const list = await fetchSchools()
+      setSchools(list)
+    } catch (error) {
+      setSchools([])
+      setSchoolsError(
+        error?.message || '학교 목록을 불러오지 못했습니다.',
+      )
+    } finally {
+      setSchoolsLoading(false)
+    }
+  }
 
   useEffect(() => {
-    if (currentUser !== 'konkuk' && currentUser !== 'yonsei') {
+    loadSchools()
+  }, [])
+
+  useEffect(() => {
+    if (!isStudentView) {
       return
     }
 
     setStudentPdfFile(null)
+    setStudentPdfTitle('')
     setPdfPage(1)
     setPdfHighlightText('')
-  }, [currentUser])
+  }, [currentSchoolId, isStudentView])
 
   const handleSourceClick = (source) => {
     const parsedPage = Number(source?.page)
@@ -59,31 +90,43 @@ function App() {
     setPdfHighlightText(evidence)
   }
 
-  const handleDocumentSelect = ({ file }) => {
+  const handleDocumentSelect = ({ file, title }) => {
     setStudentPdfFile(file)
+    setStudentPdfTitle(title || '')
     setPdfPage(1)
     setPdfHighlightText('')
   }
 
   const handleSchoolSelect = (schoolId) => {
-    setCurrentUser(schoolId)
+    lastStudentSchoolIdRef.current = schoolId
+    setCurrentSchoolId(schoolId)
+    setRole('student')
     setStudentPdfFile(null)
+    setStudentPdfTitle('')
     setPdfPage(1)
     setPdfHighlightText('')
     setIsChatStarted(true)
   }
 
-  const handleUserChange = (event) => {
-    const nextUser = event.target.value
+  const handleRoleChange = (event) => {
+    const nextRole = event.target.value
 
-    setCurrentUser(nextUser)
+    setRole(nextRole)
     setRegulationBrowserOpen(false)
 
-    if (nextUser === 'admin') {
+    if (nextRole === 'admin') {
+      setCurrentSchoolId(null)
       setStudentPdfFile(null)
+      setStudentPdfTitle('')
       setPdfPage(1)
       setPdfHighlightText('')
+      return
     }
+
+    const restoredId =
+      lastStudentSchoolIdRef.current ?? schools[0]?.id ?? null
+
+    setCurrentSchoolId(restoredId)
   }
 
   return (
@@ -143,17 +186,17 @@ function App() {
               )}
 
               <select
-                value={currentUser}
-                onChange={handleUserChange}
+                value={role}
+                onChange={handleRoleChange}
                 className="max-w-[10rem] rounded-md bg-white/20 py-1.5 pl-2 pr-8 text-xs text-white outline-none ring-1 ring-white/30 sm:max-w-none sm:pr-10 sm:text-sm"
               >
-                {USERS.map((user) => (
+                {ROLE_OPTIONS.map((option) => (
                   <option
-                    key={user.value}
-                    value={user.value}
+                    key={option.value}
+                    value={option.value}
                     className="text-slate-800"
                   >
-                    {user.label}
+                    {option.label}
                   </option>
                 ))}
               </select>
@@ -161,21 +204,29 @@ function App() {
           </header>
 
           <main className="flex h-full min-h-0 w-full flex-1 overflow-hidden">
-            {currentUser === 'admin' ? (
+            {role === 'admin' ? (
               <AdminDashboard />
             ) : (
               <div className="flex h-full min-h-0 w-full flex-1 flex-row overflow-hidden">
                 <div className="flex min-h-0 w-1/2 flex-col overflow-hidden border-r border-slate-200">
-                  <ChatScreen onSourceClick={handleSourceClick} />
+                  <ChatScreen
+                    onSourceClick={handleSourceClick}
+                    currentSchoolId={currentSchoolId}
+                    currentSchoolName={currentSchoolName}
+                  />
                 </div>
 
                 <div className="flex min-h-0 w-1/2 flex-col overflow-hidden">
                   <PdfViewer
                     targetPage={pdfPage}
                     highlightText={pdfHighlightText}
-                    currentUser={currentUser}
+                    currentUser={currentSchoolId}
                     activePdfFile={studentPdfFile}
-                    onPdfFileChange={setStudentPdfFile}
+                    activePdfTitle={studentPdfTitle}
+                    onPdfFileChange={(file) => {
+                      setStudentPdfFile(file)
+                      setStudentPdfTitle('')
+                    }}
                   />
                 </div>
               </div>
@@ -184,13 +235,20 @@ function App() {
 
           <RegulationBrowser
             open={regulationBrowserOpen && isStudentView}
-            currentUser={currentUser}
+            currentSchoolId={currentSchoolId}
+            currentSchoolName={currentSchoolName}
             onClose={() => setRegulationBrowserOpen(false)}
             onSelectDocument={handleDocumentSelect}
           />
         </>
       ) : (
-        <Home onSelectSchool={handleSchoolSelect} />
+        <Home
+          onSelectSchool={handleSchoolSelect}
+          schools={schools}
+          schoolsLoading={schoolsLoading}
+          schoolsError={schoolsError}
+          onRetrySchools={loadSchools}
+        />
       )}
     </div>
   )
