@@ -35,4 +35,4 @@ Thumbs.db
 backend/unibot.db
 backend/*.db
 backend/*.sqlite
-backend/*.sqlite3
+backend/*.sqlite3backend/scripts/.env
