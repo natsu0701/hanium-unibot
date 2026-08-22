@@ -1,43 +1,116 @@
-import { useEffect, useMemo, useState } from 'react'
-import { BookOpen, Building2, FileText, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { BookOpen, FileText, X } from 'lucide-react'
 import { LINE_ICON } from '../constants/iconProps'
-import { STUDENT_REGULATION_CATALOG } from '../data/regulationCatalog'
+import { fetchDocuments } from '../api/documentApi'
 
-function RegulationBrowser({ open, onClose, currentUser, onSelectDocument }) {
-  const initialSchoolId = useMemo(() => {
-    const match = STUDENT_REGULATION_CATALOG.find((s) => s.schoolId === currentUser)
-    return match?.schoolId ?? STUDENT_REGULATION_CATALOG[0]?.schoolId
-  }, [currentUser])
+const EMPTY_MESSAGE =
+  '등록된 규정 문서가 없습니다. 관리자 대시보드에서 PDF를 업로드해 주세요.'
 
-  const [selectedSchoolId, setSelectedSchoolId] = useState(initialSchoolId)
+const DOCUMENT_DISPLAY_NAMES = {
+  'guide.pdf': '건국대학교 글로컬캠퍼스 요람',
+  'guide2.pdf': '연세대학교 요람',
+}
+
+const DEFAULT_YORAM = {
+  file: '/guide.pdf',
+  title: DOCUMENT_DISPLAY_NAMES['guide.pdf'],
+}
+
+function getFilenameBase(filename) {
+  const raw = String(filename || '').trim()
+  return raw.split(/[/\\]/).pop() || raw
+}
+
+function getDocumentDisplayName(filename) {
+  const base = getFilenameBase(filename)
+
+  if (DOCUMENT_DISPLAY_NAMES[base]) {
+    return DOCUMENT_DISPLAY_NAMES[base]
+  }
+
+  const mappedByLower = DOCUMENT_DISPLAY_NAMES[base.toLowerCase()]
+  if (mappedByLower) {
+    return mappedByLower
+  }
+
+  return base.replace(/\.[^/.]+$/, '') || base || '문서'
+}
+
+function RegulationBrowser({
+  open,
+  onClose,
+  currentSchoolId = null,
+  currentSchoolName = '',
+  onSelectDocument,
+}) {
+  const [documents, setDocuments] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
-    if (!open) return
-    setSelectedSchoolId(initialSchoolId)
-  }, [open, initialSchoolId])
-
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e) => {
-      if (e.key === 'Escape') onClose()
+    if (!open) {
+      return undefined
     }
+
+    const onKey = (event) => {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
+
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
 
-  const selectedSchool = useMemo(
-    () =>
-      STUDENT_REGULATION_CATALOG.find((s) => s.schoolId === selectedSchoolId) ??
-      STUDENT_REGULATION_CATALOG[0],
-    [selectedSchoolId],
-  )
+  useEffect(() => {
+    let cancelled = false
 
-  if (!open) return null
+    const loadDocuments = async () => {
+      setIsLoading(true)
+
+      try {
+        const items = await fetchDocuments(currentSchoolId)
+
+        if (!cancelled) {
+          setDocuments(items)
+        }
+      } catch {
+        if (!cancelled) {
+          setDocuments([])
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadDocuments()
+
+    return () => {
+      cancelled = true
+    }
+  }, [currentSchoolId])
+
+  if (!open) {
+    return null
+  }
 
   const handlePickDoc = (doc) => {
-    onSelectDocument({ file: doc.file, title: doc.title, schoolId: selectedSchool.schoolId })
+    onSelectDocument?.({
+      id: doc.id,
+      title: getDocumentDisplayName(doc.filename),
+      file: doc.download_url,
+    })
     onClose()
   }
+
+  const handlePickDefault = () => {
+    onSelectDocument?.(DEFAULT_YORAM)
+    onClose()
+  }
+
+  const schoolLabel = currentSchoolName || '선택된 학교'
+  const isEmpty = !isLoading && documents.length === 0
 
   return (
     <div
@@ -48,88 +121,95 @@ function RegulationBrowser({ open, onClose, currentUser, onSelectDocument }) {
       onClick={onClose}
     >
       <div
-        className="flex h-[min(640px,90vh)] w-full max-w-4xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
-        onClick={(e) => e.stopPropagation()}
+        className="flex h-[min(640px,90vh)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
+        onClick={(event) => event.stopPropagation()}
       >
-        <aside className="flex w-[38%] min-w-[200px] flex-col border-r border-slate-200 bg-slate-50">
-          <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
-            <p
+        <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
+          <div className="min-w-0">
+            <h2
               id="reg-browser-title"
-              className="text-sm font-semibold text-slate-800"
+              className="text-base font-bold text-slate-800"
             >
-              학교 선택
+              {schoolLabel}
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              열람할 문서를 선택하면 우측 PDF 뷰어에 표시됩니다.
             </p>
-            <Building2 className="text-slate-400" size={18} {...LINE_ICON} aria-hidden />
           </div>
-          <ul className="flex-1 overflow-y-auto p-2">
-            {STUDENT_REGULATION_CATALOG.map((school) => {
-              const active = school.schoolId === selectedSchoolId
-              return (
-                <li key={school.schoolId}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedSchoolId(school.schoolId)}
-                    className={`mb-1 flex w-full flex-col rounded-xl px-3 py-3 text-left text-sm transition ${
-                      active
-                        ? 'bg-violet-50 font-semibold text-violet-900 ring-1 ring-violet-200'
-                        : 'text-slate-700 hover:bg-white'
-                    }`}
-                  >
-                    <span className="truncate">{school.name}</span>
-                    <span className="mt-0.5 text-xs font-normal text-slate-500">
-                      규정 {school.documents.length}건
-                    </span>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-        </aside>
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded-lg p-2 text-slate-500 transition hover:bg-slate-100"
+            aria-label="닫기"
+          >
+            <X size={20} {...LINE_ICON} />
+          </button>
+        </div>
 
-        <section className="flex min-w-0 flex-1 flex-col bg-white">
-          <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
-            <div className="min-w-0">
-              <h2 className="text-base font-bold text-slate-800">{selectedSchool?.name}</h2>
-              <p className="mt-1 text-xs text-slate-500">
-                열람할 문서를 선택하면 우측 PDF 뷰어에 표시됩니다.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="shrink-0 rounded-lg p-2 text-slate-500 transition hover:bg-slate-100"
-              aria-label="닫기"
-            >
-              <X size={20} {...LINE_ICON} />
-            </button>
-          </div>
-
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto p-4">
             <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-400">
               <BookOpen size={14} {...LINE_ICON} />
               규정·요람 목록
             </div>
-            <ul className="space-y-2">
-              {selectedSchool?.documents.map((doc) => (
-                <li key={doc.id}>
-                  <button
-                    type="button"
-                    onClick={() => handlePickDoc(doc)}
-                    className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-left text-sm transition hover:border-violet-300 hover:bg-violet-50/60"
-                  >
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-violet-600">
-                      <FileText size={20} {...LINE_ICON} />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-medium text-slate-800">{doc.title}</span>
-                      <span className="mt-0.5 block text-xs text-slate-500">{doc.category}</span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+
+            {isLoading ? (
+              <div
+                className="space-y-2"
+                aria-busy="true"
+                aria-label="문서 목록 불러오는 중"
+              >
+                {[0, 1, 2].map((item) => (
+                  <div
+                    key={item}
+                    className="h-16 animate-pulse rounded-xl bg-slate-100"
+                  />
+                ))}
+              </div>
+            ) : isEmpty ? (
+              <div className="flex min-h-[12rem] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10">
+                <p className="max-w-sm text-center text-sm leading-relaxed text-slate-500">
+                  {EMPTY_MESSAGE}
+                </p>
+              </div>
+            ) : (
+              <ul className="space-y-2">
+                {documents.map((doc) => (
+                  <li key={doc.id}>
+                    <button
+                      type="button"
+                      onClick={() => handlePickDoc(doc)}
+                      className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-left text-sm transition hover:border-violet-300 hover:bg-violet-50/60"
+                    >
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-violet-600">
+                        <FileText size={20} {...LINE_ICON} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium text-slate-800">
+                          {getDocumentDisplayName(doc.filename)}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-slate-500">
+                          PDF 문서
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
-        </section>
+
+          <div className="border-t border-slate-200 bg-slate-50 px-4 py-3">
+            <button
+              type="button"
+              onClick={handlePickDefault}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-100"
+            >
+              <FileText size={16} {...LINE_ICON} />
+              기본 요람 뷰어
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )

@@ -3,27 +3,26 @@ import { Search, X } from 'lucide-react'
 import { SiAppstore, SiGoogleplay } from 'react-icons/si'
 import { LINE_ICON } from '../constants/iconProps'
 
-const SCHOOLS = [
-  { id: 'konkuk', name: '건국대학교 글로컬캠퍼스', region: '충주' },
-  { id: 'yonsei', name: '연세대학교', region: '서울' },
-]
-
 const APP_STORE_URL = 'https://apps.apple.com/'
 const PLAY_STORE_URL = 'https://play.google.com/store'
 
-function Home({ onSelectSchool }) {
+function Home({
+  onSelectSchool,
+  schools = [],
+  schoolsLoading = false,
+  schoolsError = '',
+  onRetrySchools,
+}) {
   const [isSchoolOpen, setIsSchoolOpen] = useState(false)
   const [schoolQuery, setSchoolQuery] = useState('')
 
   const filteredSchools = useMemo(() => {
     const q = schoolQuery.trim().toLowerCase()
-    if (!q) return SCHOOLS
-    return SCHOOLS.filter(
-      (school) =>
-        school.name.toLowerCase().includes(q) ||
-        school.region.toLowerCase().includes(q),
+    if (!q) return schools
+    return schools.filter((school) =>
+      String(school.name || '').toLowerCase().includes(q),
     )
-  }, [schoolQuery])
+  }, [schoolQuery, schools])
 
   const openSchoolModal = () => {
     setSchoolQuery('')
@@ -167,7 +166,29 @@ function Home({ onSelectSchool }) {
               />
             </div>
 
-            {filteredSchools.length === 0 ? (
+            {schoolsLoading ? (
+              <div className="space-y-2 py-2" aria-busy="true" aria-label="학교 목록 불러오는 중">
+                {[0, 1, 2].map((item) => (
+                  <div
+                    key={item}
+                    className="h-14 animate-pulse rounded-xl bg-slate-100"
+                  />
+                ))}
+              </div>
+            ) : schoolsError ? (
+              <div className="py-6 text-center">
+                <p className="text-sm text-rose-600">{schoolsError}</p>
+                {onRetrySchools && (
+                  <button
+                    type="button"
+                    onClick={onRetrySchools}
+                    className="mt-3 rounded-lg bg-[#654AEC] px-4 py-2 text-sm font-medium text-white"
+                  >
+                    다시 시도
+                  </button>
+                )}
+              </div>
+            ) : filteredSchools.length === 0 ? (
               <p className="py-8 text-center text-sm text-slate-500">
                 검색 결과가 없습니다.
               </p>
@@ -181,7 +202,9 @@ function Home({ onSelectSchool }) {
                       className="flex w-full items-center justify-between rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-medium text-slate-800 transition hover:border-[#654AEC] hover:bg-violet-50"
                     >
                       <span>{school.name}</span>
-                      <span className="text-xs text-slate-500">{school.region}</span>
+                      <span className="text-xs text-slate-500">
+                        문서 {school.doc_count ?? 0}건
+                      </span>
                     </button>
                   </li>
                 ))}
