@@ -196,6 +196,9 @@ def source_from_result(result: dict) -> dict:
         "doc_name": str(
             result.get("doc_name") or ""
         ),
+        "school_id": str(
+            result.get("school_id") or ""
+        ),
         "chapter": str(
             result.get("chapter") or ""
         ),
@@ -394,6 +397,12 @@ class ChatRequest(BaseModel):
         description="기존 대화 식별값",
     )
 
+    school_id: str | None = Field(
+        default=None,
+        max_length=100,
+        description="검색 대상 학교 식별자",
+    )
+
 
 class SearchRequest(BaseModel):
     query: str = Field(
@@ -512,6 +521,7 @@ def chat(request: ChatRequest):
             request.message,
             n_results=3,
             min_score=0.20,
+            school_id=request.school_id,
         )
     
         # 2. 검색 결과를 OpenAI에 전달해
