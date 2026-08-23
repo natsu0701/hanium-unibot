@@ -31,6 +31,8 @@ import time
 
 from dotenv import load_dotenv
 
+from table_parser import html_table_to_text
+
 # json파일 저장 위치 지정
 # 기본 경로 설정
 # school_id는 main()에서 명령어 인자를 읽은 뒤에 결정된다.
@@ -293,14 +295,21 @@ def extract_pdf(
 
         # -----------------------------
         # 표 여부
-        # 현재 pypdf에서는 정확한 판별 불가
-        # 이후 Upstage 적용 예정
+        # Upstage가 반환한 <table> HTML을
+        # table_parser.html_table_to_text로 자연어 문장 변환
         # -----------------------------
 
         is_table = element["category"] == "table"
 
+        table_headers = None
+        table_summary = None
+
         if is_table:
-            text = remove_html(content.get("html", ""))
+            table_html = content.get("html", "")
+            table_data = html_table_to_text(table_html)
+            text = table_data["text"] or remove_html(table_html)
+            table_headers = table_data["headers"]
+            table_summary = table_data["rows_summary"]
 
         # -----------------------------
         # JSON 생성
@@ -327,6 +336,10 @@ def extract_pdf(
             "article_title": current_article_title,
 
             "is_table": is_table,
+
+            "table_headers": table_headers,
+
+            "table_summary": table_summary,
         }
 
         results.append(record)
