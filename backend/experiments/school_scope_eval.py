@@ -14,12 +14,46 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from app.services.rag_service import list_schools, search
+from app.services.rag_service import get_collection, search
 
 
 TEST_QUERY = "휴학 신청 방법"
 FILTER_SCHOOL_ID = "konkuk"
 COMPARE_SCHOOL_IDS: list[str | None] = ["konkuk", "demo_univ_1", None]
+
+
+def list_schools() -> list[dict]:
+    """
+    현재 ChromaDB 컬렉션에서 school_id별 문서(distinct doc_id) 수를 집계합니다.
+
+    doc_id는 PDF 분할 파싱 단위(예: 큰 PDF를 여러 조각으로 나눠 파싱한 경우
+    조각마다 별도 doc_id)이므로, 청크(행) 개수가 아니라 doc_id 종류 수를 셉니다.
+    """
+    collection = get_collection()
+
+    if collection.count() == 0:
+        return []
+
+    metadatas = (
+        collection.get(include=["metadatas"]).get("metadatas")
+        or []
+    )
+
+    doc_ids_by_school: dict[str, set[str]] = {}
+
+    for metadata in metadatas:
+        school_id = str((metadata or {}).get("school_id") or "")
+        doc_id = str((metadata or {}).get("doc_id") or "")
+
+        if not school_id or not doc_id:
+            continue
+
+        doc_ids_by_school.setdefault(school_id, set()).add(doc_id)
+
+    return [
+        {"id": school_id, "doc_count": len(doc_ids)}
+        for school_id, doc_ids in sorted(doc_ids_by_school.items())
+    ]
 
 
 def evaluate() -> None:
