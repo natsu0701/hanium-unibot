@@ -1,12 +1,16 @@
 """
-20개 표준 질의 체크리스트 검수 스크립트.
+20개 표준 질의 체크리스트 자동 검증 스크립트.
 
-※ 현재는 article 자동 판정을 끄고, 사람이 Top-N 페이지/문장을
-  직접 보고 verdict를 채우기 위한 임시 모드입니다. (삭제 예정)
+판정:
+  - PASS    : Top-3 안에 expected_article이 포함됨
+  - PARTIAL : Top-3에는 없지만 Top-10에는 있음
+  - FAIL    : Top-10에도 없음
+  - EMPTY   : 검색 결과 0건 (min_score 등으로 전부됨)
 
 사용법 (backend 디렉터리에서):
     python scripts/check_questions.py
     python scripts/check_questions.py --school-id konkuk
+    python scripts/check_questions.py --log-output evaluation/my_log.txt
 """
 
 from __future__ import annotations
@@ -25,13 +29,14 @@ if str(BACKEND_DIR) not in sys.path:
 from app.services.rag_service import search
 
 CHECKLIST_PATH = BACKEND_DIR / "evaluation" / "questions_checklist.csv"
-# 자동 판정 결과용 (기존). 현재 임시 검수 모드에서는 쓰지 않음.
 RESULT_PATH = BACKEND_DIR / "evaluation" / "checklist_result.csv"
-# [삭제 예정] 사람 검수용 출력
+# [삭제 예정] 사람 검수용 Top-10 미리보기
 REVIEW_PATH = BACKEND_DIR / "evaluation" / "checklist_review.csv"
+LOG_PATH = BACKEND_DIR / "evaluation" / "checklist_console.txt"
 
 DEFAULT_SCHOOL_ID = "konkuk"
-TOP_N = 3
+TOP_K_PASS = 3
+TOP_K_PARTIAL = 10
 # [삭제 예정] 콘솔/CSV에 보여줄 본문 최대 길이
 TEXT_PREVIEW_LEN = 180
 
@@ -69,13 +74,12 @@ class EvalResult:
     question: str
     expected_article: str
     expected_page: str
-    # 사람이 채울 칸 — 자동 판정 OFF 상태에서는 비워 둔다.
     verdict: str
     top1_article: str
     top1_score: str
     rank_of_expected: str
     must_pass: bool
-    # [삭제 예정] 사람 검수용 Top-N 미리보기
+    # [삭제 예정] 사람 검수용 Top-10 미리보기
     hits: list[HitPreview] = field(default_factory=list)
 
 
@@ -95,44 +99,38 @@ def clean_preview_text(text: object, max_len: int = TEXT_PREVIEW_LEN) -> str:
     return cleaned[:max_len].rstrip() + "…"
 
 
-# ---------------------------------------------------------------------------
-# [일시 비활성] article / article_title 자동 일치 판정
-# JSON(메타데이터)의 article 값이 기대값과 형식이 달라
-# 자동 PASS/PARTIAL/FAIL이 신뢰하기 어려워 잠시 주석 처리함.
-# ---------------------------------------------------------------------------
-#
-# def article_matches(result: dict, expected_article: str) -> bool:
-#     """검색 결과의 article / article_title이 expected_article과 일치하는지 판정."""
-#     expected = normalize_article(expected_article)
-#     if not expected:
-#         return False
-#
-#     candidates = [
-#         normalize_article(result.get("article")),
-#         normalize_article(result.get("article_title")),
-#     ]
-#
-#     for candidate in candidates:
-#         if not candidate:
-#             continue
-#         if (
-#             candidate == expected
-#             or expected in candidate
-#             or candidate in expected
-#         ):
-#             return True
-#
-#     return False
-#
-#
-# def find_expected_rank(
-#     results: list[dict],
-#     expected_article: str,
-# ) -> int | None:
-#     for rank, result in enumerate(results, start=1):
-#         if article_matches(result, expected_article):
-#             return rank
-#     return None
+def article_matches(result: dict, expected_article: str) -> bool:
+    """검색 결과의 article / article_title이 expected_article과 일치하는지 판정."""
+    expected = normalize_article(expected_article)
+    if not expected:
+        return False
+
+    candidates = [
+        normalize_article(result.get("article")),
+        normalize_article(result.get("article_title")),
+    ]
+
+    for candidate in candidates:
+        if not candidate:
+            continue
+        if (
+            candidate == expected
+            or expected in candidate
+            or candidate in expected
+        ):
+            return True
+
+    return False
+
+
+def find_expected_rank(
+    results: list[dict],
+    expected_article: str,
+) -> int | None:
+    for rank, result in enumerate(results, start=1):
+        if article_matches(result, expected_article):
+            return rank
+    return None
 
 
 def load_checklist(path: Path) -> list[ChecklistRow]:
@@ -186,7 +184,7 @@ def load_checklist(path: Path) -> list[ChecklistRow]:
 
 
 def build_hits(results: list[dict]) -> list[HitPreview]:
-    """[삭제 예정] Top-N 검색 결과를 검수용 미리보기로 변환."""
+    """[삭제 예정] 검색 결과를 검수용 미리보기로 변환."""
     hits: list[HitPreview] = []
 
     for rank, result in enumerate(results, start=1):
@@ -214,20 +212,21 @@ def evaluate_row(
     *,
     school_id: str,
 ) -> EvalResult:
-    top_n = search(
+    # Top-3 / Top-10 판정을 같은 순위표에서 하도록 n_results=10으로 한 번 검색
+    top10 = search(
         row.question,
-        n_results=TOP_N,
+        n_results=TOP_K_PARTIAL,
         school_id=school_id,
     )
 
-    if not top_n:
+    if not top10:
         return EvalResult(
             id=row.id,
             variant=row.variant,
             question=row.question,
             expected_article=row.expected_article,
             expected_page=row.expected_page,
-            verdict="",  # 사람 검수란
+            verdict="EMPTY",
             top1_article="",
             top1_score="",
             rank_of_expected="",
@@ -235,31 +234,46 @@ def evaluate_row(
             hits=[],
         )
 
-    hits = build_hits(top_n)
-    top1 = hits[0]
+    top3 = top10[:TOP_K_PASS]
+    hits = build_hits(top10)
 
-    # ------------------------------------------------------------------
-    # [일시 비활성] article 일치 기반 자동 판정
-    # ------------------------------------------------------------------
-    # rank_in_top3 = find_expected_rank(top_n, row.expected_article)
-    # if rank_in_top3 is not None:
-    #     verdict = "PASS"
-    #     rank_of_expected = str(rank_in_top3)
-    # else:
-    #     top10 = search(
-    #         row.question,
-    #         n_results=TOP_K_PARTIAL,
-    #         school_id=school_id,
-    #     )
-    #     rank_in_top10 = find_expected_rank(top10, row.expected_article)
-    #     if rank_in_top10 is not None:
-    #         verdict = "PARTIAL"
-    #         rank_of_expected = str(rank_in_top10)
-    #     else:
-    #         verdict = "FAIL"
-    #         rank_of_expected = ""
-    #
-    # return EvalResult(..., verdict=verdict, rank_of_expected=rank_of_expected)
+    top1 = top3[0]
+    top1_article = normalize_article(
+        top1.get("article") or top1.get("article_title")
+    )
+    top1_score = f"{float(top1.get('score') or 0.0):.4f}"
+
+    rank_in_top3 = find_expected_rank(top3, row.expected_article)
+    if rank_in_top3 is not None:
+        return EvalResult(
+            id=row.id,
+            variant=row.variant,
+            question=row.question,
+            expected_article=row.expected_article,
+            expected_page=row.expected_page,
+            verdict="PASS",
+            top1_article=top1_article,
+            top1_score=top1_score,
+            rank_of_expected=str(rank_in_top3),
+            must_pass=row.must_pass,
+            hits=hits,
+        )
+
+    rank_in_top10 = find_expected_rank(top10, row.expected_article)
+    if rank_in_top10 is not None:
+        return EvalResult(
+            id=row.id,
+            variant=row.variant,
+            question=row.question,
+            expected_article=row.expected_article,
+            expected_page=row.expected_page,
+            verdict="PARTIAL",
+            top1_article=top1_article,
+            top1_score=top1_score,
+            rank_of_expected=str(rank_in_top10),
+            must_pass=row.must_pass,
+            hits=hits,
+        )
 
     return EvalResult(
         id=row.id,
@@ -267,17 +281,47 @@ def evaluate_row(
         question=row.question,
         expected_article=row.expected_article,
         expected_page=row.expected_page,
-        verdict="",  # 사람이 PASS/PARTIAL/FAIL/EMPTY를 직접 기입
-        top1_article=top1.article,
-        top1_score=top1.score,
+        verdict="FAIL",
+        top1_article=top1_article,
+        top1_score=top1_score,
         rank_of_expected="",
         must_pass=row.must_pass,
         hits=hits,
     )
 
 
+def save_results(path: Path, results: list[EvalResult]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    fieldnames = [
+        "id",
+        "variant",
+        "question",
+        "verdict",
+        "top1_article",
+        "top1_score",
+        "rank_of_expected",
+    ]
+
+    with path.open("w", encoding="utf-8", newline="") as file:
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer.writeheader()
+        for result in results:
+            writer.writerow(
+                {
+                    "id": result.id,
+                    "variant": result.variant,
+                    "question": result.question,
+                    "verdict": result.verdict,
+                    "top1_article": result.top1_article,
+                    "top1_score": result.top1_score,
+                    "rank_of_expected": result.rank_of_expected,
+                }
+            )
+
+
 def save_review_csv(path: Path, results: list[EvalResult]) -> None:
-    """[삭제 예정] 사람 검수용 CSV 저장."""
+    """[삭제 예정] 사람 검수용 Top-10 CSV 저장."""
     path.parent.mkdir(parents=True, exist_ok=True)
 
     fieldnames = [
@@ -286,17 +330,17 @@ def save_review_csv(path: Path, results: list[EvalResult]) -> None:
         "question",
         "expected_article",
         "expected_page",
-        "verdict",  # 사람이 채움
-        "top1_page",
-        "top1_score",
-        "top1_text",
-        "top2_page",
-        "top2_score",
-        "top2_text",
-        "top3_page",
-        "top3_score",
-        "top3_text",
+        "verdict",
+        "rank_of_expected",
     ]
+    for rank in range(1, TOP_K_PARTIAL + 1):
+        fieldnames.extend(
+            [
+                f"top{rank}_page",
+                f"top{rank}_score",
+                f"top{rank}_text",
+            ]
+        )
 
     with path.open("w", encoding="utf-8", newline="") as file:
         writer = csv.DictWriter(file, fieldnames=fieldnames)
@@ -310,79 +354,148 @@ def save_review_csv(path: Path, results: list[EvalResult]) -> None:
                 "expected_article": result.expected_article,
                 "expected_page": result.expected_page,
                 "verdict": result.verdict,
-                "top1_page": "",
-                "top1_score": "",
-                "top1_text": "",
-                "top2_page": "",
-                "top2_score": "",
-                "top2_text": "",
-                "top3_page": "",
-                "top3_score": "",
-                "top3_text": "",
+                "rank_of_expected": result.rank_of_expected,
             }
+            for rank in range(1, TOP_K_PARTIAL + 1):
+                row[f"top{rank}_page"] = ""
+                row[f"top{rank}_score"] = ""
+                row[f"top{rank}_text"] = ""
 
             for hit in result.hits:
-                prefix = f"top{hit.rank}"
-                if prefix + "_page" not in row:
+                if hit.rank > TOP_K_PARTIAL:
                     continue
-                row[f"{prefix}_page"] = hit.page
-                row[f"{prefix}_score"] = hit.score
-                row[f"{prefix}_text"] = hit.text
+                row[f"top{hit.rank}_page"] = hit.page
+                row[f"top{hit.rank}_score"] = hit.score
+                row[f"top{hit.rank}_text"] = hit.text
 
             writer.writerow(row)
 
 
 def print_review_block(result: EvalResult, index: int, total: int) -> None:
-    """[삭제 예정] 콘솔에 사람이 읽기 좋은 검수 블록 출력."""
+    """[삭제 예정] 콘솔에 Top-10 검수 블록 출력."""
     variant_label = VARIANT_LABELS.get(result.variant, result.variant)
 
     print()
     print("=" * 72)
     print(
-        f"[{index}/{total}] {result.id} / {result.variant} ({variant_label})"
+        f"[{index}/{total}] {result.id} / {result.variant} ({variant_label}) "
+        f"→ {result.verdict}"
     )
     print(f"질문: {result.question}")
     print(
         f"기대: article={result.expected_article or '-'} "
-        f"| page={result.expected_page or '-'}"
+        f"| page={result.expected_page or '-'} "
+        f"| rank={result.rank_of_expected or '-'}"
     )
     print("-" * 72)
 
     if not result.hits:
-        print("  (검색 결과 없음 → EMPTY 후보)")
-        print("  verdict: ________  (PASS / PARTIAL / FAIL / EMPTY)")
+        print("  (검색 결과 없음 → EMPTY)")
         return
 
     for hit in result.hits:
+        marker = ""
+        if hit.rank <= TOP_K_PASS:
+            marker = " [Top-3]"
         print(
-            f"  #{hit.rank}  page={hit.page or '-'}  "
+            f"  #{hit.rank:<2}{marker}  page={hit.page or '-'}  "
             f"score={hit.score}  article={hit.article or '-'}"
         )
-        print(f"      {hit.text or '(본문 없음)'}")
-
-    print("-" * 72)
-    print("  verdict: ________  (PASS / PARTIAL / FAIL / EMPTY)")
+        print(f"       {hit.text or '(본문 없음)'}")
 
 
-def print_manual_guide(results: list[EvalResult]) -> None:
-    empty_count = sum(1 for item in results if not item.hits)
+def print_summary(results: list[EvalResult]) -> None:
+    total = len(results)
+    pass_count = sum(1 for item in results if item.verdict == "PASS")
+    partial_count = sum(1 for item in results if item.verdict == "PARTIAL")
+    fail_count = sum(1 for item in results if item.verdict == "FAIL")
+    empty_count = sum(1 for item in results if item.verdict == "EMPTY")
+    pass_rate = (pass_count / total * 100.0) if total else 0.0
+
     print()
-    print("=" * 72)
-    print("[임시 검수 모드] article 자동 판정 OFF")
-    print(f"총 {len(results)}건 조회 완료 (검색결과 없음: {empty_count}건)")
-    print("verdict는 CSV의 빈 칸에 직접 기입하세요.")
-    print("  PASS    : Top-3 안에 기대 내용이 있음")
-    print("  PARTIAL : Top-3엔 없지만 관련 내용은 보임 (참고)")
-    print("  FAIL    : Top-3가 기대와 무관")
-    print("  EMPTY   : 검색 결과 0건")
-    print("=" * 72)
+    print(
+        f"전체 통과율(PASS): {pass_count}/{total} ({pass_rate:.1f}%)"
+    )
+    print(
+        f"판정 분포: PASS={pass_count}  PARTIAL={partial_count}  "
+        f"FAIL={fail_count}  EMPTY={empty_count}"
+    )
+    print()
+    print("변형별 통과율(PASS):")
+
+    for variant in ("A", "B", "C"):
+        variant_rows = [
+            item for item in results if item.variant == variant
+        ]
+        if not variant_rows:
+            continue
+
+        variant_pass = sum(
+            1 for item in variant_rows if item.verdict == "PASS"
+        )
+        variant_total = len(variant_rows)
+        variant_rate = (
+            variant_pass / variant_total * 100.0
+            if variant_total
+            else 0.0
+        )
+        label = VARIANT_LABELS.get(variant, variant)
+        print(
+            f"  {variant} ({label}): "
+            f"{variant_pass}/{variant_total} "
+            f"({variant_rate:.1f}%)"
+        )
+
+    bad_rows = [
+        item
+        for item in results
+        if item.verdict in {"FAIL", "EMPTY"}
+    ]
+
+    print()
+    if not bad_rows:
+        print("FAIL/EMPTY 목록: 없음")
+        return
+
+    print("FAIL/EMPTY 목록:")
+    print("| id | variant | question | verdict |")
+    print("|---|---|---|---|")
+    for item in bad_rows:
+        question = item.question.replace("|", "\\|")
+        print(
+            f"| {item.id} | {item.variant} | {question} | {item.verdict} |"
+        )
+
+
+class TeeWriter:
+    """stdout과 로그 파일에 동시에 기록합니다."""
+
+    def __init__(self, *streams):
+        self.streams = streams
+
+    def write(self, data: str) -> int:
+        for stream in self.streams:
+            stream.write(data)
+            stream.flush()
+        return len(data)
+
+    def flush(self) -> None:
+        for stream in self.streams:
+            stream.flush()
+
+    def isatty(self) -> bool:
+        return False
+
+
+def resolve_path(path: Path) -> Path:
+    return path if path.is_absolute() else BACKEND_DIR / path
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "표준 질의 체크리스트 검색 결과를 사람 검수용으로 출력합니다. "
-            "(article 자동 판정 일시 비활성)"
+            "표준 질의 체크리스트를 RAG 검색으로 자동 검증합니다. "
+            "(PASS/PARTIAL/FAIL/EMPTY)"
         ),
     )
     parser.add_argument(
@@ -394,8 +507,25 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
+        default=RESULT_PATH,
+        help=f"자동 판정 결과 CSV (기본: {RESULT_PATH})",
+    )
+    parser.add_argument(
+        "--review-output",
+        type=Path,
         default=REVIEW_PATH,
-        help=f"검수용 CSV 경로 (기본: {REVIEW_PATH})",
+        help=f"Top-10 검수용 CSV (기본: {REVIEW_PATH})",
+    )
+    parser.add_argument(
+        "--log-output",
+        type=Path,
+        default=LOG_PATH,
+        help=f"터미널 출력 저장 txt (기본: {LOG_PATH})",
+    )
+    parser.add_argument(
+        "--no-log",
+        action="store_true",
+        help="터미널 출력 txt 저장을 하지 않음",
     )
     parser.add_argument(
         "--school-id",
@@ -405,7 +535,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--quiet",
         action="store_true",
-        help="콘솔 상세 검수 블록을 생략하고 요약만 출력",
+        help="콘솔 Top-10 상세 블록을 생략하고 요약만 출력",
+    )
+    parser.add_argument(
+        "--skip-result",
+        action="store_true",
+        help="checklist_result.csv 저장을 건너뜀",
     )
     return parser.parse_args(argv)
 
@@ -413,16 +548,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
 
-    checklist_path = (
-        args.checklist
-        if args.checklist.is_absolute()
-        else BACKEND_DIR / args.checklist
-    )
-    output_path = (
-        args.output
-        if args.output.is_absolute()
-        else BACKEND_DIR / args.output
-    )
+    checklist_path = resolve_path(args.checklist)
+    output_path = resolve_path(args.output)
+    review_path = resolve_path(args.review_output)
+    log_path = resolve_path(args.log_output)
 
     try:
         checklist = load_checklist(checklist_path)
@@ -430,36 +559,79 @@ def main(argv: list[str] | None = None) -> int:
         print(f"오류: {exc}", file=sys.stderr)
         return 1
 
-    print(f"체크리스트: {checklist_path}")
-    print(f"학교 필터: {args.school_id}")
-    print(f"질문 수: {len(checklist)}")
-    print("모드: 사람 검수 (article 자동 판정 OFF)")
+    original_stdout = sys.stdout
+    log_file = None
 
-    results: list[EvalResult] = []
+    if not args.no_log:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_file = log_path.open("w", encoding="utf-8")
+        sys.stdout = TeeWriter(original_stdout, log_file)
 
-    for index, row in enumerate(checklist, start=1):
-        if args.quiet:
+    try:
+        print(f"체크리스트: {checklist_path}")
+        print(f"학교 필터: {args.school_id}")
+        print(f"질문 수: {len(checklist)}")
+        print(
+            f"판정: Top-{TOP_K_PASS}=PASS / "
+            f"Top-{TOP_K_PARTIAL}=PARTIAL / 밖=FAIL / 0건=EMPTY"
+        )
+        if log_file is not None:
+            print(f"콘솔 로그: {log_path}")
+
+        results: list[EvalResult] = []
+
+        for index, row in enumerate(checklist, start=1):
+            if args.quiet:
+                print(
+                    f"[{index}/{len(checklist)}] "
+                    f"{row.id}/{row.variant} 검색 중...",
+                    flush=True,
+                )
+
+            result = evaluate_row(row, school_id=args.school_id)
+            results.append(result)
+
+            if args.quiet:
+                print(
+                    f"  → {result.verdict}"
+                    f" (top1={result.top1_article or '-'}, "
+                    f"score={result.top1_score or '-'}, "
+                    f"rank={result.rank_of_expected or '-'})"
+                )
+            else:
+                print_review_block(result, index, len(checklist))
+
+        if not args.skip_result:
+            save_results(output_path, results)
+            print(f"\n자동 판정 결과 저장: {output_path}")
+
+        save_review_csv(review_path, results)
+        print(f"Top-10 검수용 CSV 저장: {review_path}")
+        print_summary(results)
+
+        if log_file is not None:
+            print(f"\n터미널 출력 저장: {log_path}")
+
+        must_pass_failures = [
+            item
+            for item in results
+            if item.must_pass and item.verdict == "FAIL"
+        ]
+
+        if must_pass_failures:
+            print()
             print(
-                f"[{index}/{len(checklist)}] "
-                f"{row.id}/{row.variant} 검색 중...",
-                flush=True,
+                f"must_pass FAIL {len(must_pass_failures)}건 "
+                "→ exit code 1",
+                file=sys.stderr,
             )
+            return 1
 
-        result = evaluate_row(row, school_id=args.school_id)
-        results.append(result)
-
-        if not args.quiet:
-            print_review_block(result, index, len(checklist))
-
-    save_review_csv(output_path, results)
-    print(f"\n검수용 CSV 저장: {output_path}")
-    print(
-        f"(참고) 기존 자동판정 결과 파일은 건드리지 않음: {RESULT_PATH}"
-    )
-    print_manual_guide(results)
-
-    # 자동 판정 OFF → must_pass FAIL로 CI 종료하지 않음
-    return 0
+        return 0
+    finally:
+        sys.stdout = original_stdout
+        if log_file is not None:
+            log_file.close()
 
 
 if __name__ == "__main__":
