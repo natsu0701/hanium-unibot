@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* Narrow/mobile screens keep boxes almost square so long text stays readable. */
+  --unibot-box-radius: clamp(0.125rem, 1.35vw, 1rem);
+}
+
 body {
   margin: 0;
+}
+
+@layer components {
+  .unibot-box {
+    border-radius: var(--unibot-box-radius);
+  }
 }
