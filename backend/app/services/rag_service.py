@@ -136,6 +136,7 @@ def build_search_text(
 ) -> str:
     """
     임베딩 검색에 사용할 문자열을 생성합니다.
+    표 청크는 헤더에 의미가 집중되므로 헤더를 별도로 강화합니다.
     """
     parts = [
         str(
@@ -144,10 +145,18 @@ def build_search_text(
         str(
             chunk.get("article_title") or ""
         ).strip(),
+    ]
+
+    if chunk.get("is_table"):
+        parts.append(
+            " ".join(chunk.get("table_headers") or [])
+        )
+
+    parts.append(
         str(
             chunk.get("text") or ""
-        ).strip(),
-    ]
+        ).strip()
+    )
 
     return " ".join(
         part
@@ -213,6 +222,12 @@ def build_metadata(
         "is_table": bool(
             chunk.get("is_table", False)
         ),
+        "table_headers": ", ".join(
+            chunk.get("table_headers") or []
+        ),
+        "table_summary": str(
+            chunk.get("table_summary") or ""
+        ),
     }
 
 
@@ -236,6 +251,14 @@ def save_to_chromadb(
             chunk.get("text") or ""
         ).strip()
     ]
+
+    # 동일 chunk_id(중복 원문)가 배치 안에서 겹치면
+    # ChromaDB upsert가 DuplicateIDError를 던지므로 미리 중복 제거합니다.
+    deduped_chunks: dict[str, dict[str, Any]] = {
+        build_chunk_id(chunk): chunk
+        for chunk in valid_chunks
+    }
+    valid_chunks = list(deduped_chunks.values())
 
     if reset:
         try:
