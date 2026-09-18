@@ -8,10 +8,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID, uuid4
 
-from dotenv import load_dotenv
-from pathlib import Path
+from app.core.logger import get_logger
 
-BASE_DIR = Path(__file__).resolve().parents[2]  # backend 폴더
+from dotenv import load_dotenv
+
+BASE_DIR = Path(__file__).resolve().parents[2]
 load_dotenv(BASE_DIR / ".env")
 
 from fastapi import (
@@ -34,10 +35,12 @@ from app.services.answer_service import generate_answer
 from app.services.rag_service import (
     DEFAULT_CHUNKS_PATH,
     collection_count,
+    get_model,
     ingest_json,
     search,
-    get_model,  # warm-up용으로 추가
 )
+
+logger = get_logger(__name__)
 
 
 RAW_DIR = BACKEND_DIR / "data" / "raw"
@@ -78,7 +81,7 @@ def process_document(doc_id: str) -> None:
     """
     업로드된 PDF 처리 파이프라인 자리표시자입니다.
 
-    W4 후반에 예진님 OCR/청킹 파이프라인으로 교체합니다.
+    W4 후반에 OCR/청킹 파이프라인으로 교체합니다.
     """
     db = SessionLocal()
 
@@ -100,12 +103,12 @@ def process_document(doc_id: str) -> None:
         document.status = "completed"
         db.commit()
 
-    except Exception as exc:
+    except Exception:
         db.rollback()
-        print(
-            f"문서 처리 중 오류 발생 ({doc_id}): {exc}"
+        logger.exception(
+            "[DOCUMENT] 문서 처리 중 오류 발생 | doc_id=%s",
+            doc_id,
         )
-
     finally:
         db.close()
 
@@ -177,19 +180,12 @@ def build_source_text(result: dict) -> str:
 def source_from_result(result: dict) -> dict:
     """
     프론트와 호환되는 출처 데이터를 생성합니다.
-
-    프론트에서 사용하는 주요 필드:
-    - source.text
-    - source.page
-    - source.evidence
     """
     return {
         "text": build_source_text(result),
         "page": int(
             result.get("page") or 0
         ),
-
-        # 상세 출처 표시 및 향후 확장용
         "doc_id": str(
             result.get("doc_id") or ""
         ),
@@ -252,10 +248,6 @@ def save_chat_log(
         )
 
         db.add(chat_log)
-
-         #테스트용: 항상 실패를 발생시키기
-         #raise RuntimeError("테스트용 강제 채팅 로그 저장 실패")
-    
         db.commit()
 
     except Exception:
@@ -281,29 +273,36 @@ async def lifespan(_: FastAPI):
     4. ChromaDB가 비어 있으면 processed JSON 자동 적재
     """
 
-    # SQLite 테이블을 생성합니다.
     try:
         Base.metadata.create_all(
             bind=engine
         )
-        
-        print(
-            "[INFO] SQLite 테이블 초기화 완료"
-        )
+
+        logger.info("[STARTUP] SQLite 테이블 초기화 완료")
 
     except Exception as exc:
         print(
             f"[ERROR] SQLite 초기화 중 오류 발생: {exc}"
         )
-     # 임베딩 모델 warm-up
-    try:
-        print("[INFO]임베딩 모델 warm-up 시작...")
-        get_model()  # rag_service의 임베딩 모델을 미리 로드
-        print("[INFO]임베딩 모델 준비 완료")
-    except Exception as exc:
-        print(f"[ERROR]임베딩 모델 warm-up 중 오류 발생: {exc}")
 
-    # ChromaDB를 확인합니다.
+    # 임베딩 모델 warm-up
+    try:
+        print(
+            "[INFO]임베딩 모델 warm-up 시작..."
+        )
+
+        get_model()
+
+        print(
+            "[INFO]임베딩 모델 준비 완료"
+        )
+
+    except Exception as exc:
+        print(
+            f"[ERROR]임베딩 모델 warm-up 중 오류 발생: {exc}"
+        )
+
+    # ChromaDB 확인
     try:
         current_count = collection_count()
 
@@ -337,8 +336,6 @@ async def lifespan(_: FastAPI):
             )
 
     except Exception as exc:
-        # RAG 초기화가 실패하더라도 서버 상태 확인은
-        # 가능하도록 서버 전체 실행은 유지합니다.
         print(
             f"[ERROR]RAG 초기화 중 오류 발생: {exc}"
         )
@@ -452,6 +449,29 @@ def read_root():
 
 
 # =========================================================
+# 학교 목록 API
+# =========================================================
+
+@app.get("/api/schools")
+def get_schools():
+    """
+    프론트 학교 선택 화면에서 사용하는 학교 목록 API입니다.
+    """
+    return {
+        "data": {
+            "schools": [
+                {
+                    "id": "konkuk",
+                    "name": "건국대학교 글로컬캠퍼스",
+                    "doc_count": 1,
+                }
+            ]
+        },
+        "request_id": f"req_{uuid4().hex}",
+    }
+
+
+# =========================================================
 # 검색 테스트 API
 # =========================================================
 
@@ -459,8 +479,6 @@ def read_root():
 def search_api(request: SearchRequest):
     """
     OpenAI 답변 생성 없이 ChromaDB 검색 결과만 확인합니다.
-
-    검색 정확도와 청크 내용을 점검할 때 사용하는 테스트 API입니다.
     """
     try:
         results = search(
@@ -500,52 +518,98 @@ def chat(request: ChatRequest):
     """
     프론트 채팅창에서 호출하는 OpenAI 기반 RAG 채팅 API입니다.
 
-    처리 순서:
-    1. 사용자 질문으로 ChromaDB 검색
-    2. 관련 청크 Top-3 조회
-    3. 검색 결과를 OpenAI에 전달
-    4. 질문에 필요한 내용만 요약한 답변 생성
-    5. 실제로 사용한 출처만 선택
-    6. 최종 질문·답변·출처를 SQLite에 저장
+    현재 데이터의 청크에 school_id가 없기 때문에
+    시연 버전에서는 학교별 검색 필터를 적용하지 않습니다.
     """
     message_id = f"msg_{uuid4().hex}"
+
     conversation_id = (
         request.conversation_id
         or uuid4()
     )
+
     request_id = f"req_{uuid4().hex}"
-    rejection_reason: str | None = None  # 미리 초기화 추가
+
+    started_at = time.perf_counter()
+
+    logger.info("=" * 60)
+    logger.info(
+        "[CHAT] %s | user=%s | school=%s",
+        request_id,
+        request.user_id,
+        request.school_id or "미지정",
+    )
+    logger.info("[CHAT] 질문: %r", request.message)
+    logger.info("-" * 54)
+
+    rejection_reason: str | None = None
+
     try:
-        # 1. 질문과 관련된 문서 청크를 검색합니다.
+        # =================================================
+        # 중요:
+        # 현재 extracted.json 청크에는 school_id가 없습니다.
+        #
+        # 따라서 아래 검색에서는
+        # school_id=request.school_id 를 넣지 않습니다.
+        # =================================================
+        logger.info("[CHAT] 검색 시작")
+
         search_results = search(
             request.message,
             n_results=3,
             min_score=0.20,
-            school_id=request.school_id,
         )
-    
-        # 2. 검색 결과를 OpenAI에 전달해
-        # 최종 답변을 생성합니다.
+
+        logger.info(
+            "[CHAT] 검색 완료 | 반환 청크: %d개",
+            len(search_results),
+        )
+        logger.info("-" * 54)
+
+        logger.info(
+            "[CHAT] 답변 생성 시작 | 전달 청크: %d개",
+            len(search_results),
+        )
+
         generated = generate_answer(
             question=request.message,
             search_results=search_results,
         )
-        
+
+        logger.info("[CHAT] 답변 생성 완료")
+        logger.info("-" * 54)
 
     except RuntimeError as exc:
+        elapsed = time.perf_counter() - started_at
+
+        logger.warning(
+            "[CHAT] %s 처리 실패 | RuntimeError | %.2f초 | %s",
+            request_id,
+            elapsed,
+            exc,
+        )
+        logger.info("=" * 60)
+
         raise HTTPException(
             status_code=503,
             detail=str(exc),
         ) from exc
 
-    except Exception as exc:
+    except Exception:
+        elapsed = time.perf_counter() - started_at
+
+        logger.exception(
+            "[CHAT] %s 처리 중 예외 발생 | %.2f초",
+            request_id,
+            elapsed,
+        )
+        logger.info("=" * 60)
+
         raise HTTPException(
             status_code=500,
-            detail=f"답변 생성 중 오류가 발생했습니다: {exc}",
-        ) from exc
+            detail="답변 생성 중 내부 오류가 발생했습니다.",
+        )
 
-    # OpenAI가 실제 답변 작성에 사용했다고 선택한
-    # 검색 결과 번호입니다.
     used_indexes = generated.get(
         "used_source_indexes",
         [],
@@ -564,13 +628,11 @@ def chat(request: ChatRequest):
         ):
             valid_used_indexes.append(index)
 
-    # 실제 답변 작성에 사용한 검색 결과만 선택합니다.
     used_results = [
         search_results[index]
         for index in valid_used_indexes
     ]
 
-    # 프론트에서 사용하는 출처 형식으로 변환합니다.
     sources = [
         source_from_result(result)
         for result in used_results
@@ -580,8 +642,10 @@ def chat(request: ChatRequest):
         generated.get("answer")
         or "답변을 생성하지 못했습니다."
     ).strip()
-    # 새로 추가: rejection_reason 읽기
-    rejection_reason = generated.get("rejection_reason")
+
+    rejection_reason = generated.get(
+        "rejection_reason"
+    )
 
     try:
         confidence = float(
@@ -598,6 +662,7 @@ def chat(request: ChatRequest):
         0.0,
         min(confidence, 1.0),
     )
+
     try:
         verification_score = float(
             generated.get(
@@ -605,6 +670,7 @@ def chat(request: ChatRequest):
                 confidence,
             )
         )
+
     except (TypeError, ValueError):
         verification_score = confidence
 
@@ -613,7 +679,7 @@ def chat(request: ChatRequest):
         min(verification_score, 1.0),
     )
 
-    # 최종 채팅 결과를 SQLite에 저장합니다.
+    # 로그 저장 실패는 사용자 답변을 막지 않습니다.
     try:
         save_chat_log(
             user_id=request.user_id,
@@ -626,28 +692,48 @@ def chat(request: ChatRequest):
             sources=sources,
         )
 
-    except Exception as exc:
-        # 로그 저장 실패는 사용자 응답에 영향을 주지 않고,
-        # 서버 콘솔에만 경고로 남깁니다.
-        print(
-            f"[WARN]경고: 채팅 이력 저장 실패 (사용자에게는 답변 정상 반환): {exc}"
+        logger.info(
+            "[CHAT] SQLite 저장 완료 | conversation_id=%s",
+            conversation_id,
+        )
+
+    except Exception:
+        logger.exception(
+            "[CHAT] %s 채팅 이력 저장 실패 "
+            "(사용자 응답은 계속 반환합니다)",
+            request_id,
         )
 
     created_at = utc_now()
 
+    elapsed = time.perf_counter() - started_at
+
+    logger.info(
+        "[CHAT] 최종 응답 완료 | confidence=%.2f | "
+        "verification=%.2f | 출처=%d개 | 총 소요 %.2f초",
+        confidence,
+        verification_score,
+        len(sources),
+        elapsed,
+    )
+    logger.info("[CHAT] SQLite 저장 완료")
+    logger.info("=" * 60)
+
     return {
-    "data": {
-        "answer": answer,
-        "sources": sources,
-        "confidence": confidence,
-        "verification_score": verification_score,
-        "rejection_reason": rejection_reason,
-        "conversation_id": str(conversation_id),
-        "message_id": message_id,
-        "created_at": created_at,
-    },
-    "request_id": request_id,
-}
+        "data": {
+            "answer": answer,
+            "sources": sources,
+            "confidence": confidence,
+            "verification_score": verification_score,
+            "rejection_reason": rejection_reason,
+            "conversation_id": str(
+                conversation_id
+            ),
+            "message_id": message_id,
+            "created_at": created_at,
+        },
+        "request_id": request_id,
+    }
 
 
 # =========================================================
@@ -681,8 +767,6 @@ def chat_history(
 ):
     """
     /api/chat에서 SQLite에 저장된 채팅 이력을 조회합니다.
-
-    created_at 역순(최신순)으로 정렬하여 반환합니다.
     """
     try:
         query = db.query(ChatLog).filter(
@@ -694,11 +778,11 @@ def chat_history(
                 ChatLog.conversation_id
                 == str(conversation_id)
             )
-        
+
         total_count = query.count()
 
         offset = (page - 1) * limit
-        
+
         chat_logs = (
             query
             .order_by(ChatLog.created_at.desc())
@@ -736,6 +820,7 @@ def chat_history(
             created_at_str = (
                 created_at.isoformat() + "Z"
             )
+
         else:
             created_at_str = (
                 created_at
@@ -754,7 +839,10 @@ def chat_history(
             }
         )
 
-    has_more = offset + len(items) < total_count
+    has_more = (
+        offset + len(items)
+        < total_count
+    )
 
     return {
         "data": {
@@ -780,7 +868,8 @@ async def upload_document(
     db: Session = Depends(get_db),
 ):
     """
-    PDF 문서를 업로드하고 처리 파이프라인을 백그라운드에서 시작합니다.
+    PDF 문서를 업로드하고 처리 파이프라인을
+    백그라운드에서 시작합니다.
     """
     original_filename = (
         file.filename or ""
@@ -790,15 +879,21 @@ async def upload_document(
         file.content_type or ""
     ).lower()
 
-    is_pdf_name = original_filename.lower().endswith(
-        ".pdf"
+    is_pdf_name = (
+        original_filename
+        .lower()
+        .endswith(".pdf")
     )
+
     is_pdf_type = content_type in {
         "application/pdf",
         "application/x-pdf",
     }
 
-    if not (is_pdf_name or is_pdf_type):
+    if not (
+        is_pdf_name
+        or is_pdf_type
+    ):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
@@ -808,8 +903,16 @@ async def upload_document(
         )
 
     doc_id = str(uuid4())
-    RAW_DIR.mkdir(parents=True, exist_ok=True)
-    save_path = RAW_DIR / f"{doc_id}.pdf"
+
+    RAW_DIR.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    save_path = (
+        RAW_DIR
+        / f"{doc_id}.pdf"
+    )
 
     size_bytes = 0
 
@@ -825,9 +928,14 @@ async def upload_document(
 
                 size_bytes += len(chunk)
 
-                if size_bytes > MAX_UPLOAD_BYTES:
+                if (
+                    size_bytes
+                    > MAX_UPLOAD_BYTES
+                ):
                     raise HTTPException(
-                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        status_code=(
+                            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+                        ),
                         detail={
                             "code": "FILE_TOO_LARGE",
                             "message": (
@@ -865,7 +973,9 @@ async def upload_document(
             save_path.unlink()
 
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_ENTITY
+            ),
             detail={
                 "code": "UNSUPPORTED_FILE_TYPE",
                 "message": "빈 파일은 업로드할 수 없습니다.",
@@ -878,7 +988,9 @@ async def upload_document(
         else f"{doc_id}.pdf"
     )
 
-    if not filename.lower().endswith(".pdf"):
+    if not filename.lower().endswith(
+        ".pdf"
+    ):
         filename = f"{filename}.pdf"
 
     document = Document(
@@ -914,7 +1026,9 @@ async def upload_document(
     )
 
     return {
-        "data": document_to_dict(document),
+        "data": document_to_dict(
+            document
+        ),
         "request_id": f"req_{uuid4().hex}",
     }
 
@@ -923,11 +1037,15 @@ async def upload_document(
 def list_documents(
     db: Session = Depends(get_db),
 ):
-    """업로드된 문서를 upload_time 역순으로 조회합니다."""
+    """
+    업로드된 문서를 upload_time 역순으로 조회합니다.
+    """
     try:
         documents = (
             db.query(Document)
-            .order_by(Document.upload_time.desc())
+            .order_by(
+                Document.upload_time.desc()
+            )
             .all()
         )
 
