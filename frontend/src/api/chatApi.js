@@ -63,7 +63,10 @@ export async function sendChatMessage(message, schoolId) {
       sources: normalizeSources(data.sources),
     }
   } catch (error) {
-    const serverMessage = error?.response?.data?.error?.message
+    const detail = error?.response?.data?.detail
+    const serverMessage =
+      error?.response?.data?.error?.message ||
+      (typeof detail === 'string' ? detail : null)
     throw new Error(
       serverMessage ?? '채팅 요청 중 오류가 발생했습니다.',
       { cause: error },

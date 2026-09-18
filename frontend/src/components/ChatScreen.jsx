@@ -1,9 +1,37 @@
-import { FileText, Table } from 'lucide-react'
+import { CircleHelp, FileText, Table } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { LINE_ICON } from '../constants/iconProps'
 import { sendChatMessage } from '../api/chatApi'
 
-const QUICK_QUESTIONS = ['학사 일정', '장학금 조회', '졸업 요건']
+const QUICK_QUESTIONS = [
+  '수강신청 이월학점은 몇 학점까지 인정되나요?',
+  '제적된 학생도 재입학이 가능한가요?',
+  '부전공은 총 몇 학점을 이수해야 하나요?',
+  '이미 취득한 학점을 포기할 수 있는 제도가 있나요?',
+  '8학기를 초과해서 등록하는 경우 등록금은 어떻게 계산되나요?',
+  '본인 결혼이나 출산 등으로 인한 공인결석은 며칠까지 인정되나요?',
+]
+
+const FAIL_HINT =
+  '다른 표현이나 구체적인 학사 용어로 다시 질문해 보세요'
+
+function QuickQuestionChips({ onSelect, disabled = false }) {
+  return (
+    <div className="flex w-full flex-wrap items-start gap-2">
+      {QUICK_QUESTIONS.map((question) => (
+        <button
+          key={question}
+          type="button"
+          onClick={() => onSelect(question)}
+          disabled={disabled}
+          className="unibot-box max-w-full whitespace-normal border border-slate-300 bg-slate-50 px-3 py-1.5 text-left text-xs font-medium leading-snug text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
+        >
+          {question}
+        </button>
+      ))}
+    </div>
+  )
+}
 
 function isTableSource(source) {
   return Boolean(source) && source.is_table === true
@@ -111,7 +139,7 @@ function SourceEvidencePanel({ sources, onSourceClick }) {
         }`}
       >
         <div className="min-h-0 overflow-hidden">
-          <div className="w-full rounded-lg border border-slate-100 bg-slate-50 p-4 transition-all duration-300">
+          <div className="unibot-box w-full border border-slate-100 bg-slate-50 p-4 transition-all duration-300 sm:rounded-lg">
             <div className="mb-1.5 text-left text-[11px] font-medium text-slate-400">
               페이지: {activeSource?.page ?? '-'}쪽
             </div>
@@ -196,6 +224,7 @@ function ChatScreen({
           text: answer,
           sender: 'bot',
           sources,
+          isFailed: sources.length === 0,
         },
       ])
     } catch (error) {
@@ -208,6 +237,7 @@ function ChatScreen({
             '죄송합니다. 답변을 가져오는 중 오류가 발생했습니다.',
           sender: 'bot',
           sources: [],
+          isFailed: true,
         },
       ])
     } finally {
@@ -258,10 +288,10 @@ function ChatScreen({
               Array.isArray(message.sources) &&
               message.sources.length > 0
 
-            const isRefused =
+            const isFailed =
               message.sender === 'bot' &&
-              !hasSources &&
-              !message.isGreeting
+              !message.isGreeting &&
+              (message.isFailed === true || !hasSources)
 
             return (
               <div
@@ -273,23 +303,51 @@ function ChatScreen({
                 }`}
               >
                 <div
-                  className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm leading-relaxed shadow-sm ${
+                  className={`unibot-box px-4 py-2 text-sm leading-relaxed shadow-sm ${
                     message.sender === 'user'
-                      ? 'rounded-br-md bg-yellow-300 text-slate-900'
-                      : isRefused
-                        ? 'rounded-bl-md bg-slate-100 text-slate-500'
-                        : 'rounded-bl-md bg-white text-slate-700'
+                      ? 'max-w-[80%] bg-yellow-300 text-slate-900 max-sm:rounded-br-none sm:rounded-br-md'
+                      : isFailed
+                        ? 'w-full max-w-[min(100%,40rem)] border border-slate-200 bg-slate-100 text-slate-600 max-sm:rounded-bl-none sm:rounded-bl-md'
+                        : 'max-w-[80%] bg-white text-slate-700 max-sm:rounded-bl-none sm:rounded-bl-md'
                   }`}
                 >
                   {message.sender === 'bot' && !message.isGreeting && (
                     <div className="mb-2">
-                      <span className="inline-flex items-center rounded-full border border-slate-200 bg-transparent px-2.5 py-0.5 text-[10px] font-medium tracking-tight text-slate-500">
+                      <span className="unibot-box inline-flex items-center border border-slate-200 bg-transparent px-2.5 py-0.5 text-[10px] font-medium tracking-tight text-slate-500 sm:rounded-full">
                         {sourceBadgeLabel}
                       </span>
                     </div>
                   )}
 
-                  {message.text}
+                  <div className="flex items-start gap-2">
+                    {isFailed && (
+                      <CircleHelp
+                        size={16}
+                        {...LINE_ICON}
+                        className="mt-0.5 shrink-0 text-slate-500"
+                        aria-hidden
+                      />
+                    )}
+
+                    <div className="min-w-0 flex-1">
+                      <p className="m-0 whitespace-pre-wrap">{message.text}</p>
+
+                      {isFailed && (
+                        <>
+                          <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                            {FAIL_HINT}
+                          </p>
+
+                          <div className="mt-3">
+                            <QuickQuestionChips
+                              disabled={isLoading}
+                              onSelect={handleQuickQuestion}
+                            />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
 
                   {message.sender === 'bot' && hasSources && (
                     <SourceEvidencePanel
@@ -304,7 +362,7 @@ function ChatScreen({
 
           {isLoading && (
             <div className="flex justify-start">
-              <div className="rounded-2xl rounded-bl-md bg-white px-4 py-3 shadow-sm">
+              <div className="unibot-box bg-white px-4 py-3 shadow-sm max-sm:rounded-bl-none sm:rounded-bl-md">
                 <div className="flex items-center gap-1.5">
                   <span className="h-2 w-2 animate-pulse rounded-full bg-slate-400 [animation-delay:0ms]" />
                   <span className="h-2 w-2 animate-pulse rounded-full bg-slate-400 [animation-delay:200ms]" />
@@ -319,18 +377,11 @@ function ChatScreen({
       </section>
 
       <footer className="shrink-0 border-t border-slate-200 bg-white px-4 py-3">
-        <div className="mx-auto mb-3 flex w-full max-w-3xl gap-2 overflow-x-auto pb-1">
-          {QUICK_QUESTIONS.map((question) => (
-            <button
-              key={question}
-              type="button"
-              onClick={() => handleQuickQuestion(question)}
-              disabled={isLoading}
-              className="shrink-0 rounded-full border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {question}
-            </button>
-          ))}
+        <div className="mx-auto mb-3 w-full max-w-3xl">
+          <QuickQuestionChips
+            disabled={isLoading}
+            onSelect={handleQuickQuestion}
+          />
         </div>
 
         <form
@@ -344,13 +395,13 @@ function ChatScreen({
             placeholder="메시지를 입력하세요..."
             rows={1}
             disabled={isLoading}
-            className="max-h-32 min-h-[44px] flex-1 resize-none rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100"
+            className="unibot-box max-h-32 min-h-[44px] flex-1 resize-none border border-slate-300 px-4 py-2 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 sm:rounded-xl"
           />
 
           <button
             type="submit"
             disabled={isLoading}
-            className="h-11 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 disabled:cursor-not-allowed disabled:opacity-50"
+            className="unibot-box h-11 bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 disabled:cursor-not-allowed disabled:opacity-50 sm:rounded-xl"
           >
             전송
           </button>
