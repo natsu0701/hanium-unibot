@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.core.logger import get_logger
+from app.Core.logger import get_logger
 
 logger = get_logger(__name__)
 import hashlib

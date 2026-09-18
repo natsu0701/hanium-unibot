@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID, uuid4
 
-from app.core.logger import get_logger
+from app.Core.logger import get_logger
 
 from dotenv import load_dotenv
 
