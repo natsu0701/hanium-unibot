@@ -40,6 +40,8 @@ BASE_DIR = os.path.dirname(
     os.path.abspath(__file__)
 )
 
+MAX_CHUNK_LEN = 1800
+
 
 # .env 파일 읽기 (backend/.env)
 load_dotenv(os.path.join(BASE_DIR, "..", ".env"))
@@ -133,6 +135,66 @@ def extract_article(text: str):
 
     return None, None
 
+def is_title(text: str) -> bool:
+    if len(text) >= 40:
+        return False
+
+    patterns = [
+        r"^[가-힣]\)\s*",       # 가) 나)
+        r"^\(\d+\)\s*",         # (1) (2)
+        r"^\d+\.\s*",           # 1. 2.
+        r"^제\s*\d+\s*조",      # 제N조
+        r"^[■▶●]\s*",           # ■ ▶ ●
+    ]
+
+    return any(re.match(pattern, text) for pattern in patterns)
+
+def split_long_record(record):
+    text = record["text"]
+
+    if len(text) <= MAX_CHUNK_LEN:
+        return [record]
+
+    sentences = re.split(r"(?<=[.!?。！？])\s*", text)
+
+    chunks = []
+    current_text = ""
+
+    for sentence in sentences:
+        if not sentence:
+            continue
+
+        # 문장 하나가 MAX_CHUNK_LEN보다 긴 경우
+        if len(sentence) > MAX_CHUNK_LEN:
+            if current_text:
+                new_record = record.copy()
+                new_record["text"] = current_text.strip()
+                chunks.append(new_record)
+                current_text = ""
+
+            for i in range(0, len(sentence), MAX_CHUNK_LEN):
+                new_record = record.copy()
+                new_record["text"] = sentence[i:i + MAX_CHUNK_LEN].strip()
+                chunks.append(new_record)
+
+            continue
+
+        if current_text and len(current_text) + len(sentence) + 1 > MAX_CHUNK_LEN:
+            new_record = record.copy()
+            new_record["text"] = current_text.strip()
+            chunks.append(new_record)
+            current_text = sentence
+        else:
+            if current_text:
+                current_text += " "
+            current_text += sentence
+
+    if current_text.strip():
+        new_record = record.copy()
+        new_record["text"] = current_text.strip()
+        chunks.append(new_record)
+
+    return chunks
 
 def build_doc_id(
     filename: str,
@@ -230,6 +292,12 @@ def extract_pdf(
 
     results = []
     seen_pages = set()
+
+    pending_record = None
+    pending_count = 0
+    merge_count = 0
+    title_count = 0
+
 
     # 현재 장/조 정보 유지
     current_chapter = None
@@ -342,7 +410,35 @@ def extract_pdf(
             "table_summary": table_summary,
         }
 
-        results.append(record)
+        if is_title(text):
+            if pending_record is not None:
+                results.extend(split_long_record(pending_record))
+                pending_record = None
+                pending_count = 0
+
+            record["article_title"] = text
+            pending_record = record
+            pending_count = 1
+            title_count += 1
+            continue
+
+        if pending_record is not None:
+            pending_record["text"] += "\n" + text
+            pending_count += 1
+            merge_count += 1
+
+            if (
+                len(pending_record["text"]) >= 100
+                or pending_count >= 3
+            ):
+                results.extend(split_long_record(pending_record))
+                pending_record = None
+                pending_count = 0
+
+            continue
+
+        results.extend(split_long_record(record))
+
 
         if page_num not in seen_pages:
             print(
@@ -351,8 +447,47 @@ def extract_pdf(
             )
             seen_pages.add(page_num)
 
+    if pending_record is not None:
+        results.extend(split_long_record(pending_record))
+        pending_record = None
+        pending_count = 0
+
+    total_chunks = len(results)
+
+    article_title_count = sum(
+        1 for record in results
+        if record.get("article_title")
+    )
+
+    avg_chunk_length = (
+        sum(len(record["text"]) for record in results) / total_chunks
+        if total_chunks > 0
+        else 0
+    )
+
+    article_title_fill_rate = (
+        article_title_count / total_chunks * 100
+        if total_chunks > 0
+        else 0
+    )
+
     print(
-        f"\n완료! 총 {len(results)}페이지",
+        f"\n완료! 총 {total_chunks}개 chunk",
+        file=sys.stderr
+    )
+
+    print(
+        f"제목-본문 병합 횟수: {merge_count}",
+        file=sys.stderr
+    )
+
+    print(
+        f"article_title 채움률: {article_title_fill_rate:.2f}%",
+        file=sys.stderr
+    )
+
+    print(
+        f"평균 chunk 길이: {avg_chunk_length:.2f}자",
         file=sys.stderr
     )
 
