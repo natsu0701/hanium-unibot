@@ -15,6 +15,9 @@ const QUICK_QUESTIONS = [
 const FAIL_HINT =
   '다른 표현이나 구체적인 학사 용어로 다시 질문해 보세요'
 
+const CHIP_CLASS =
+  'border border-slate-300 bg-slate-50 text-xs font-medium leading-snug text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700'
+
 function QuickQuestionChips({ onSelect, disabled = false }) {
   return (
     <div className="flex w-full flex-wrap items-start gap-2">
@@ -24,7 +27,7 @@ function QuickQuestionChips({ onSelect, disabled = false }) {
           type="button"
           onClick={() => onSelect(question)}
           disabled={disabled}
-          className="unibot-box max-w-full whitespace-normal border border-slate-300 bg-slate-200 px-3 py-1.5 text-left text-xs font-medium leading-snug text-slate-700 transition hover:border-slate-400 hover:bg-slate-300 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
+          className={`unibot-box max-w-full whitespace-normal px-3 py-1.5 text-left disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm ${CHIP_CLASS}`}
         >
           {question}
         </button>
@@ -73,10 +76,8 @@ function SourceChip({ source, onSelect, isActive }) {
     <button
       type="button"
       onClick={() => onSelect?.(source)}
-      className={`group relative inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition ${
-        isActive
-          ? 'border-slate-400 bg-white text-slate-800'
-          : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300 hover:bg-slate-100'
+      className={`group relative inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 ${CHIP_CLASS} ${
+        isActive ? 'border-slate-400' : ''
       }`}
     >
       <Icon
