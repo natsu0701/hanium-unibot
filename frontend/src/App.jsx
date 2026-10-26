@@ -141,7 +141,7 @@ function App() {
                 {...LINE_ICON}
               />
 
-              <p className="m3-title truncate font-bold">Uni-Bot</p>
+              <p className="truncate font-bold">Uni-Bot</p>
 
               <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-[#8B5CF6]">
                 Self-RAG
@@ -161,7 +161,7 @@ function App() {
                     type="button"
                     onClick={() => setRegulationBrowserOpen(true)}
                     title="학교별 규정 목록 보기"
-                    className="inline-flex min-h-10 items-center gap-1.5 rounded-md-sm bg-white/20 px-3 py-1.5 text-sm transition duration-md-short ease-md-standard hover:bg-white/30"
+                    className="inline-flex items-center gap-1.5 rounded-md bg-white/20 px-3 py-1.5 text-sm transition hover:bg-white/30"
                   >
                     <FileText size={16} {...LINE_ICON} />
                     <span className="hidden sm:inline">규정 목록</span>
@@ -171,7 +171,7 @@ function App() {
                     type="button"
                     title="PDF 뷰어에서 검색"
                     onClick={() => pdfViewerRef.current?.openSearch()}
-                    className="inline-flex min-h-10 items-center gap-1.5 rounded-md-sm bg-white/20 px-3 py-1.5 text-sm transition duration-md-short ease-md-standard hover:bg-white/30"
+                    className="inline-flex items-center gap-1.5 rounded-md bg-white/20 px-3 py-1.5 text-sm transition hover:bg-white/30"
                   >
                     <SearchIcon size={16} {...LINE_ICON} />
                     <span className="hidden sm:inline">검색</span>
@@ -182,7 +182,7 @@ function App() {
               <select
                 value={role}
                 onChange={handleRoleChange}
-                className="max-w-[10rem] min-h-10 rounded-md-sm bg-white/20 py-1.5 pl-2 pr-8 text-xs text-white outline-none ring-1 ring-white/30 transition duration-md-short ease-md-standard sm:max-w-none sm:pr-10 sm:text-sm"
+                className="max-w-[10rem] rounded-md bg-white/20 py-1.5 pl-2 pr-8 text-xs text-white outline-none ring-1 ring-white/30 sm:max-w-none sm:pr-10 sm:text-sm"
               >
                 {ROLE_OPTIONS.map((option) => (
                   <option

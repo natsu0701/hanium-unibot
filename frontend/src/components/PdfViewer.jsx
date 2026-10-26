@@ -584,8 +584,8 @@ const PdfViewer = forwardRef(function PdfViewer(
       <header className="sticky top-0 z-20 shrink-0 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="flex items-center gap-3 px-4 py-3">
           <div className="min-w-0 flex-1">
-            <div className="relative min-w-0 max-w-xs rounded-md-sm border border-slate-200 bg-white px-3 py-2">
-              <p className={`m3-title truncate text-sm font-medium text-slate-700 ${isRemotePdf ? '' : 'pr-8'}`}>
+            <div className="relative min-w-0 max-w-xs rounded-lg border border-slate-200 bg-white px-3 py-2">
+              <p className={`truncate text-sm font-medium text-slate-700 ${isRemotePdf ? '' : 'pr-8'}`}>
                 {headerTitle}
               </p>
 
@@ -637,13 +637,13 @@ const PdfViewer = forwardRef(function PdfViewer(
                   onChange={(event) => setSearchDraft(event.target.value)}
                   placeholder="PDF 검색"
                   aria-label="PDF 본문 검색"
-                  className="h-10 w-[9.5rem] rounded-md-xl border border-slate-200 bg-white py-1.5 pl-8 pr-8 text-sm text-slate-800 outline-none transition duration-md-short ease-md-standard placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-200 sm:w-44"
+                  className="h-8 w-[9.5rem] rounded-md border border-slate-200 bg-white py-1.5 pl-8 pr-8 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-200 sm:w-44"
                 />
                 {searchDraft ? (
                   <button
                     type="button"
                     onClick={clearSearch}
-                    className="absolute right-1.5 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition duration-md-short ease-md-standard hover:bg-slate-100 hover:text-slate-600"
+                    className="absolute right-1.5 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
                     aria-label="검색어 지우기"
                   >
                     <X size={14} {...LINE_ICON} />
@@ -659,7 +659,7 @@ const PdfViewer = forwardRef(function PdfViewer(
                   <button
                     type="button"
                     onClick={() => goToMatch(activeMatch - 1)}
-                    className="inline-flex h-10 w-8 items-center justify-center rounded-md-sm border border-slate-200 text-slate-600 transition duration-md-short ease-md-standard hover:bg-slate-100"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 transition hover:bg-slate-100"
                     aria-label="이전 검색 결과"
                   >
                     <ChevronLeft size={16} {...LINE_ICON} />
@@ -667,7 +667,7 @@ const PdfViewer = forwardRef(function PdfViewer(
                   <button
                     type="button"
                     onClick={() => goToMatch(activeMatch + 1)}
-                    className="inline-flex h-10 w-8 items-center justify-center rounded-md-sm border border-slate-200 text-slate-600 transition duration-md-short ease-md-standard hover:bg-slate-100"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 transition hover:bg-slate-100"
                     aria-label="다음 검색 결과"
                   >
                     <ChevronRight size={16} {...LINE_ICON} />
@@ -679,7 +679,7 @@ const PdfViewer = forwardRef(function PdfViewer(
             <a
               href={fileUrl}
               download
-              className="inline-flex h-10 w-10 items-center justify-center rounded-md-sm border border-slate-200 text-slate-600 transition duration-md-short ease-md-standard hover:bg-slate-100"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 transition hover:bg-slate-100"
               aria-label="다운로드"
             >
               <Download size={16} {...LINE_ICON} />
@@ -688,7 +688,7 @@ const PdfViewer = forwardRef(function PdfViewer(
             <button
               type="button"
               onClick={handlePrint}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-md-sm border border-slate-200 text-slate-600 transition duration-md-short ease-md-standard hover:bg-slate-100"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 transition hover:bg-slate-100"
               aria-label="인쇄"
             >
               <Printer size={16} {...LINE_ICON} />
@@ -732,7 +732,7 @@ const PdfViewer = forwardRef(function PdfViewer(
                     ? Math.min(containerWidth - 32, 800)
                     : undefined
                 }
-                className="overflow-hidden rounded-md-sm shadow-md-2"
+                className="overflow-hidden rounded-lg shadow-lg"
                 renderAnnotationLayer
                 renderTextLayer
                 onRenderTextLayerSuccess={handleTextLayerReady}
@@ -748,7 +748,7 @@ const PdfViewer = forwardRef(function PdfViewer(
             type="button"
             onClick={goPrevPage}
             disabled={pageNumber <= 1}
-            className="inline-flex min-h-10 items-center gap-1 rounded-md-sm border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition duration-md-short ease-md-standard hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <ChevronLeft size={16} {...LINE_ICON} />
             이전
@@ -771,7 +771,7 @@ const PdfViewer = forwardRef(function PdfViewer(
               }}
               onBlur={handlePageInputSubmit}
               aria-label="페이지 번호 입력"
-              className="h-10 w-14 rounded-md-xs border border-slate-300 px-2 py-1 text-center text-sm outline-none focus:border-[#654AEC] focus:ring-2 focus:ring-[#654AEC]/20"
+              className="w-14 rounded-md border border-slate-300 px-2 py-1 text-center text-sm outline-none focus:border-[#654AEC] focus:ring-2 focus:ring-[#654AEC]/20"
             />
 
             <span>/ {numPages ?? '-'}</span>
@@ -785,7 +785,7 @@ const PdfViewer = forwardRef(function PdfViewer(
                 ? pageNumber >= numPages
                 : false
             }
-            className="inline-flex min-h-10 items-center gap-1 rounded-md-sm border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition duration-md-short ease-md-standard hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
           >
             다음
             <ChevronRight size={16} {...LINE_ICON} />

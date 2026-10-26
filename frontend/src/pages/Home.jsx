@@ -47,11 +47,14 @@ function Home({
             학사 행정 AI 비서
           </p>
 
-          <h1 className="m3-title mb-6 text-6xl font-black tracking-tight text-white md:text-8xl">
+          <h1
+            className="mb-6 text-6xl font-black tracking-tight text-white md:text-8xl"
+            style={{ fontFamily: 'Arial Black, sans-serif' }}
+          >
             Uni-Bot
           </h1>
 
-          <h2 className="m3-title mb-10 break-keep text-3xl font-normal leading-snug text-white md:text-4xl">
+          <h2 className="mb-10 break-keep text-3xl font-normal leading-snug text-white md:text-4xl">
             캠퍼스의 모든 정보,
             <br />
             찾지 말고 물어보세요!
@@ -61,7 +64,7 @@ function Home({
             <button
               type="button"
               onClick={openSchoolModal}
-              className="group flex min-h-12 w-full items-center gap-3 rounded-md-xl border border-white/25 bg-white px-4 py-3.5 text-left shadow-md-2 ring-1 ring-black/5 transition duration-md-short ease-md-standard hover:border-white/40 hover:bg-white hover:shadow-md-2"
+              className="group flex w-full items-center gap-3 rounded-full border border-white/25 bg-white px-4 py-3.5 text-left shadow-xl ring-1 ring-black/5 transition hover:border-white/40 hover:bg-white hover:shadow-2xl"
             >
               <Search
                 size={22}
@@ -79,7 +82,7 @@ function Home({
               href={APP_STORE_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex min-h-10 items-center gap-3 rounded-md-xl border border-white/15 bg-white/15 px-5 py-2.5 font-medium text-white shadow-sm backdrop-blur-sm transition duration-md-short ease-md-standard hover:bg-white/25"
+              className="inline-flex items-center gap-3 rounded-full border border-white/15 bg-white/15 px-5 py-2.5 font-medium text-white shadow-sm backdrop-blur-sm transition hover:bg-white/25"
             >
               <span
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-black text-white shadow-inner"
@@ -93,7 +96,7 @@ function Home({
               href={PLAY_STORE_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex min-h-10 items-center gap-3 rounded-md-xl border border-white/15 bg-white/15 px-5 py-2.5 font-medium text-white shadow-sm backdrop-blur-sm transition duration-md-short ease-md-standard hover:bg-white/25"
+              className="inline-flex items-center gap-3 rounded-full border border-white/15 bg-white/15 px-5 py-2.5 font-medium text-white shadow-sm backdrop-blur-sm transition hover:bg-white/25"
             >
               <span
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-white text-slate-900 shadow-inner"
@@ -125,12 +128,12 @@ function Home({
 
       {isSchoolOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 duration-md-short ease-md-standard"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="school-modal-title"
         >
-          <div className="relative w-full max-w-md rounded-md-xl bg-white p-6 shadow-md-2">
+          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <button
               type="button"
               onClick={closeSchoolModal}
@@ -139,7 +142,7 @@ function Home({
             >
               <X size={20} {...LINE_ICON} />
             </button>
-            <h3 id="school-modal-title" className="m3-title mb-2 text-lg font-bold text-slate-800">
+            <h3 id="school-modal-title" className="mb-2 text-lg font-bold text-slate-800">
               학교 선택
             </h3>
             <p className="mb-4 text-sm text-slate-600">
@@ -157,7 +160,7 @@ function Home({
                 value={schoolQuery}
                 onChange={(event) => setSchoolQuery(event.target.value)}
                 placeholder="학교 이름으로 검색..."
-                className="min-h-12 w-full rounded-md-sm border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm text-slate-900 outline-none transition duration-md-short ease-md-standard placeholder:text-slate-400 focus:border-[#654AEC] focus:ring-2 focus:ring-[#654AEC]/25"
+                className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#654AEC] focus:ring-2 focus:ring-[#654AEC]/25"
                 autoComplete="off"
                 autoFocus
               />
@@ -179,7 +182,7 @@ function Home({
                   <button
                     type="button"
                     onClick={onRetrySchools}
-                    className="mt-3 min-h-10 rounded-md-sm bg-[#654AEC] px-4 py-2 text-sm font-medium text-white transition duration-md-short ease-md-standard"
+                    className="mt-3 rounded-lg bg-[#654AEC] px-4 py-2 text-sm font-medium text-white"
                   >
                     다시 시도
                   </button>
@@ -196,7 +199,7 @@ function Home({
                     <button
                       type="button"
                       onClick={() => handlePickSchool(school.id)}
-                      className="flex min-h-12 w-full items-center justify-between rounded-md-sm border border-slate-200 px-4 py-3 text-left text-sm font-medium text-slate-800 transition duration-md-short ease-md-standard hover:border-[#654AEC] hover:bg-violet-50"
+                      className="flex w-full items-center justify-between rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-medium text-slate-800 transition hover:border-[#654AEC] hover:bg-violet-50"
                     >
                       <span>{school.name}</span>
                       <span className="text-xs text-slate-500">
