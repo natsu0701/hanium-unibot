@@ -24,7 +24,7 @@ function QuickQuestionChips({ onSelect, disabled = false }) {
           type="button"
           onClick={() => onSelect(question)}
           disabled={disabled}
-          className="unibot-box max-w-full whitespace-normal border border-slate-300 bg-slate-50 px-3 py-1.5 text-left text-xs font-medium leading-snug text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
+          className="unibot-box max-w-full whitespace-normal border border-slate-300 bg-slate-200 px-3 py-1.5 text-left text-xs font-medium leading-snug text-slate-700 transition hover:border-slate-400 hover:bg-slate-300 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
         >
           {question}
         </button>
@@ -306,9 +306,7 @@ function ChatScreen({
                   className={`unibot-box px-4 py-2 text-sm leading-relaxed shadow-sm ${
                     message.sender === 'user'
                       ? 'max-w-[80%] bg-yellow-300 text-slate-900 max-sm:rounded-br-none sm:rounded-br-md'
-                      : isFailed
-                        ? 'w-full max-w-[min(100%,40rem)] border border-slate-200 bg-slate-100 text-slate-600 max-sm:rounded-bl-none sm:rounded-bl-md'
-                        : 'max-w-[80%] bg-white text-slate-700 max-sm:rounded-bl-none sm:rounded-bl-md'
+                      : 'max-w-[80%] bg-white text-slate-700 max-sm:rounded-bl-none sm:rounded-bl-md'
                   }`}
                 >
                   {message.sender === 'bot' && !message.isGreeting && (
@@ -324,7 +322,7 @@ function ChatScreen({
                       <CircleHelp
                         size={16}
                         {...LINE_ICON}
-                        className="mt-0.5 shrink-0 text-slate-500"
+                        className="mt-0.5 shrink-0 text-red-500"
                         aria-hidden
                       />
                     )}
@@ -333,18 +331,9 @@ function ChatScreen({
                       <p className="m-0 whitespace-pre-wrap">{message.text}</p>
 
                       {isFailed && (
-                        <>
-                          <p className="mt-2 text-xs leading-relaxed text-slate-500">
-                            {FAIL_HINT}
-                          </p>
-
-                          <div className="mt-3">
-                            <QuickQuestionChips
-                              disabled={isLoading}
-                              onSelect={handleQuickQuestion}
-                            />
-                          </div>
-                        </>
+                        <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                          {FAIL_HINT}
+                        </p>
                       )}
                     </div>
                   </div>
