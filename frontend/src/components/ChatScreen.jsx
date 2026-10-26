@@ -24,7 +24,7 @@ function QuickQuestionChips({ onSelect, disabled = false }) {
           type="button"
           onClick={() => onSelect(question)}
           disabled={disabled}
-          className="unibot-box max-w-full whitespace-normal border border-slate-300 bg-slate-50 px-3 py-1.5 text-left text-xs font-medium leading-snug text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
+          className="unibot-box max-w-full whitespace-normal border border-slate-300 bg-slate-50 px-3 py-1.5 text-left text-xs font-medium leading-snug text-slate-700 transition duration-md-short ease-md-standard hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
         >
           {question}
         </button>
@@ -275,14 +275,14 @@ function ChatScreen({
 
   return (
     <section className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-slate-100">
-      <header className="border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
-        <h1 className="text-lg font-bold text-slate-800">
+      <header className="border-b border-slate-200 bg-white px-4 py-3 shadow-md-1">
+        <h1 className="m3-title text-lg font-bold text-slate-800">
           Uni-Bot 채팅
         </h1>
       </header>
 
-      <section className="flex-1 overflow-y-auto px-4 py-5">
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
+      <section className="flex-1 overflow-y-auto py-5 pr-3">
+        <div className="flex w-full flex-col gap-3">
           {messages.map((message) => {
             const hasSources =
               Array.isArray(message.sources) &&
@@ -376,8 +376,8 @@ function ChatScreen({
         </div>
       </section>
 
-      <footer className="shrink-0 border-t border-slate-200 bg-white px-4 py-3">
-        <div className="mx-auto mb-3 w-full max-w-3xl">
+      <footer className="shrink-0 border-t border-slate-200 bg-white py-3 pr-3">
+        <div className="mb-3 w-full">
           <QuickQuestionChips
             disabled={isLoading}
             onSelect={handleQuickQuestion}
@@ -386,7 +386,7 @@ function ChatScreen({
 
         <form
           onSubmit={handleSubmit}
-          className="mx-auto flex w-full max-w-3xl items-end gap-2"
+          className="flex w-full items-end gap-2"
         >
           <textarea
             value={input}
@@ -395,13 +395,13 @@ function ChatScreen({
             placeholder="메시지를 입력하세요..."
             rows={1}
             disabled={isLoading}
-            className="unibot-box max-h-32 min-h-[44px] flex-1 resize-none border border-slate-300 px-4 py-2 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 sm:rounded-xl"
+            className="unibot-box max-h-32 min-h-12 flex-1 resize-none border border-slate-300 px-4 py-2 text-sm text-slate-800 outline-none transition duration-md-short ease-md-standard focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 sm:rounded-md-lg"
           />
 
           <button
             type="submit"
             disabled={isLoading}
-            className="unibot-box h-11 bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 disabled:cursor-not-allowed disabled:opacity-50 sm:rounded-xl"
+            className="unibot-box h-12 min-w-12 bg-blue-600 px-5 text-sm font-semibold text-white transition duration-md-short ease-md-standard hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 disabled:cursor-not-allowed disabled:opacity-50 sm:rounded-md-lg"
           >
             전송
           </button>
