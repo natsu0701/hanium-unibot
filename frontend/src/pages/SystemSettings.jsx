@@ -9,7 +9,7 @@ function SystemSettings() {
   const [vectorEndpoint, setVectorEndpoint] = useState('')
   const [llmProvider, setLlmProvider] = useState('gpt-4o')
   const [greeting, setGreeting] = useState(
-    '안녕하세요, 학사 행정 비서입니다. 무엇을 도와드릴까요?',
+    '안녕하세요! 학사 행정 규정 검색 AI Uni-Bot입니다. 무엇이 궁금하신가요?',
   )
   const [themeColor, setThemeColor] = useState('#654AEC')
   const [maintenance, setMaintenance] = useState(false)
@@ -144,7 +144,7 @@ function SystemSettings() {
                 type="color"
                 value={themeColor}
                 onChange={(e) => setThemeColor(e.target.value)}
-                className="h-12 w-12 cursor-pointer overflow-hidden rounded-full border-2 border-slate-200 bg-white p-0 shadow-sm"
+                className="theme-color-input h-12 w-12 cursor-pointer overflow-hidden rounded-full border-2 border-slate-200 p-0 shadow-sm"
                 title="색상 선택"
               />
               <input

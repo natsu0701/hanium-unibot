@@ -232,6 +232,10 @@ function App() {
             open={regulationBrowserOpen && isStudentView}
             currentSchoolId={currentSchoolId}
             currentSchoolName={currentSchoolName}
+            currentPdfFile={studentPdfFile || '/guide.pdf'}
+            currentPdfTitle={
+              studentPdfTitle || '건국대학교 글로컬캠퍼스 학사 요람'
+            }
             onClose={() => setRegulationBrowserOpen(false)}
             onSelectDocument={handleDocumentSelect}
           />

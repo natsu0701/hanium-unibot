@@ -6,14 +6,18 @@ import { fetchDocuments } from '../api/documentApi'
 const EMPTY_MESSAGE =
   '등록된 규정 문서가 없습니다. 관리자 대시보드에서 PDF를 업로드해 주세요.'
 
+const HANDBOOK_TITLE = '건국대학교 글로컬캠퍼스 학사 요람'
+
 const DOCUMENT_DISPLAY_NAMES = {
-  'guide.pdf': '건국대학교 글로컬캠퍼스 요람',
+  'guide.pdf': HANDBOOK_TITLE,
   'guide2.pdf': '연세대학교 요람',
 }
 
 const DEFAULT_YORAM = {
+  id: 'local-guide',
   file: '/guide.pdf',
-  title: DOCUMENT_DISPLAY_NAMES['guide.pdf'],
+  filename: 'guide.pdf',
+  title: HANDBOOK_TITLE,
 }
 
 function getFilenameBase(filename) {
@@ -41,6 +45,8 @@ function RegulationBrowser({
   onClose,
   currentSchoolId = null,
   currentSchoolName = '',
+  currentPdfFile = '/guide.pdf',
+  currentPdfTitle = HANDBOOK_TITLE,
   onSelectDocument,
 }) {
   const [documents, setDocuments] = useState([])
@@ -105,12 +111,29 @@ function RegulationBrowser({
   }
 
   const handlePickDefault = () => {
-    onSelectDocument?.(DEFAULT_YORAM)
+    onSelectDocument?.({
+      ...DEFAULT_YORAM,
+      file: currentPdfFile || DEFAULT_YORAM.file,
+      title: currentPdfTitle || DEFAULT_YORAM.title,
+    })
     onClose()
   }
 
   const schoolLabel = currentSchoolName || '선택된 학교'
-  const isEmpty = !isLoading && documents.length === 0
+  const openPdf = {
+    id: 'current-open-pdf',
+    filename: getFilenameBase(currentPdfFile) || DEFAULT_YORAM.filename,
+    download_url: currentPdfFile || DEFAULT_YORAM.file,
+    displayName: currentPdfTitle || HANDBOOK_TITLE,
+  }
+  const listedDocuments = [
+    openPdf,
+    ...documents.filter(
+      (doc) =>
+        getFilenameBase(doc.filename) !== getFilenameBase(openPdf.filename),
+    ),
+  ]
+  const isEmpty = !isLoading && listedDocuments.length === 0
 
   return (
     <div
@@ -153,20 +176,7 @@ function RegulationBrowser({
               규정·요람 목록
             </div>
 
-            {isLoading ? (
-              <div
-                className="space-y-2"
-                aria-busy="true"
-                aria-label="문서 목록 불러오는 중"
-              >
-                {[0, 1, 2].map((item) => (
-                  <div
-                    key={item}
-                    className="h-16 animate-pulse rounded-xl bg-slate-100"
-                  />
-                ))}
-              </div>
-            ) : isEmpty ? (
+            {isEmpty ? (
               <div className="flex min-h-[12rem] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10">
                 <p className="max-w-sm text-center text-sm leading-relaxed text-slate-500">
                   {EMPTY_MESSAGE}
@@ -174,27 +184,40 @@ function RegulationBrowser({
               </div>
             ) : (
               <ul className="space-y-2">
-                {documents.map((doc) => (
-                  <li key={doc.id}>
-                    <button
-                      type="button"
-                      onClick={() => handlePickDoc(doc)}
-                      className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-left text-sm transition hover:border-violet-300 hover:bg-violet-50/60"
-                    >
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-violet-600">
-                        <FileText size={20} {...LINE_ICON} />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium text-slate-800">
-                          {getDocumentDisplayName(doc.filename)}
+                {listedDocuments.map((doc, index) => {
+                  const isCurrent = index === 0
+
+                  return (
+                    <li key={doc.id}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          isCurrent
+                            ? handlePickDefault()
+                            : handlePickDoc(doc)
+                        }
+                        className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm transition ${
+                          isCurrent
+                            ? 'border-violet-300 bg-violet-50/70'
+                            : 'border-slate-200 bg-slate-50/80 hover:border-violet-300 hover:bg-violet-50/60'
+                        }`}
+                      >
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-violet-600">
+                          <FileText size={20} {...LINE_ICON} />
                         </span>
-                        <span className="mt-0.5 block text-xs text-slate-500">
-                          PDF 문서
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-medium text-slate-800">
+                            {doc.displayName ||
+                              getDocumentDisplayName(doc.filename)}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-slate-500">
+                            {isCurrent ? '지금 열려 있는 PDF' : 'PDF 문서'}
+                          </span>
                         </span>
-                      </span>
-                    </button>
-                  </li>
-                ))}
+                      </button>
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </div>

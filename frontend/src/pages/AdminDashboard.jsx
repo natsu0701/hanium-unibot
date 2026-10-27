@@ -9,7 +9,7 @@ import {
   Settings,
   Users,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { LINE_ICON } from '../constants/iconProps'
 import DocumentManagement from './DocumentManagement'
 import KnowledgeBase from './KnowledgeBase'
@@ -20,6 +20,26 @@ import UserPermissions from './UserPermissions'
 import ValidationLogs from './ValidationLogs'
 
 function DashboardHome() {
+  const fileInputRef = useRef(null)
+  const [uploadName, setUploadName] = useState('')
+  const [isDragOver, setIsDragOver] = useState(false)
+
+  const takePdf = (file) => {
+    if (!file) {
+      return
+    }
+
+    const isPdf =
+      file.type === 'application/pdf' ||
+      String(file.name || '').toLowerCase().endsWith('.pdf')
+
+    if (!isPdf) {
+      return
+    }
+
+    setUploadName(file.name)
+  }
+
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-slate-100">
       <div className="shrink-0 border-b border-slate-200 bg-white px-8 py-6">
@@ -51,9 +71,52 @@ function DashboardHome() {
 
         <div className="mt-6 grid grid-cols-2 gap-4">
           <div className="space-y-4">
-            <section className="rounded-xl border-2 border-dashed border-slate-300 bg-white p-8 text-center shadow-sm">
-              <p className="text-sm font-medium text-slate-700">문서 업로드 (Drag & Drop)</p>
-              <p className="mt-2 text-xs text-slate-400">PDF 파일을 드래그해 업로드하세요.</p>
+            <section>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf,.pdf"
+                className="sr-only"
+                onChange={(event) => {
+                  takePdf(event.target.files?.[0])
+                  event.target.value = ''
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(event) => {
+                  event.preventDefault()
+                  setIsDragOver(true)
+                }}
+                onDragLeave={() => setIsDragOver(false)}
+                onDrop={(event) => {
+                  event.preventDefault()
+                  setIsDragOver(false)
+                  takePdf(event.dataTransfer.files?.[0])
+                }}
+                className={`w-full rounded-xl border-2 border-dashed bg-white p-8 text-center shadow-sm transition ${
+                  isDragOver
+                    ? 'border-violet-400 bg-violet-50'
+                    : 'border-slate-300 hover:border-violet-300 hover:bg-violet-50/40'
+                }`}
+              >
+                <p className="text-sm font-medium text-slate-700">
+                  문서 업로드 (Drag & Drop)
+                </p>
+                <p className="mt-2 text-xs text-slate-400">
+                  PDF 파일을 드래그해 업로드하세요.
+                </p>
+                {uploadName ? (
+                  <p className="mt-3 truncate text-xs font-medium text-violet-700">
+                    선택됨: {uploadName}
+                  </p>
+                ) : (
+                  <p className="mt-3 text-xs text-slate-400">
+                    영역을 클릭하면 파일을 선택할 수 있습니다.
+                  </p>
+                )}
+              </button>
             </section>
 
             <section className="rounded-xl bg-white p-5 shadow-sm">

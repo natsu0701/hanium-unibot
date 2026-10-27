@@ -45,3 +45,25 @@
   color: inherit;
   padding: 0 1px;
 }
+
+.theme-color-input {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+}
+
+.theme-color-input::-webkit-color-swatch-wrapper {
+  padding: 0;
+  border: none;
+  border-radius: 9999px;
+}
+
+.theme-color-input::-webkit-color-swatch {
+  border: none;
+  border-radius: 9999px;
+}
+
+.theme-color-input::-moz-color-swatch {
+  border: none;
+  border-radius: 9999px;
+}

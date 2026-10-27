@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 
 const LOG_ROWS = [
   {
@@ -50,6 +50,49 @@ const LOG_ROWS = [
     status: 'Warning',
   },
 ]
+
+function DateField({ label, value, onChange }) {
+  const inputRef = useRef(null)
+
+  const openPicker = () => {
+    const input = inputRef.current
+
+    if (!input) {
+      return
+    }
+
+    if (typeof input.showPicker === 'function') {
+      input.showPicker()
+      return
+    }
+
+    input.focus()
+  }
+
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-medium text-slate-500">
+        {label}
+      </span>
+      <span
+        className="inline-flex cursor-pointer items-center rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm transition hover:border-violet-300 focus-within:border-violet-300 focus-within:ring-2 focus-within:ring-violet-100"
+        onClick={openPicker}
+      >
+        <input
+          ref={inputRef}
+          type="date"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onClick={(event) => {
+            event.stopPropagation()
+            event.currentTarget.showPicker?.()
+          }}
+          className="w-[11.5rem] cursor-pointer bg-transparent text-sm text-slate-800 outline-none"
+        />
+      </span>
+    </label>
+  )
+}
 
 function scoreBadge(value) {
   const color =
@@ -111,24 +154,16 @@ function ValidationLogs() {
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-8 py-6">
         <div className="mb-4 flex shrink-0 flex-wrap items-end gap-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500">시작일</label>
-            <input
-              type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-100"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500">종료일</label>
-            <input
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-100"
-            />
-          </div>
+          <DateField
+            label="시작일"
+            value={fromDate}
+            onChange={setFromDate}
+          />
+          <DateField
+            label="종료일"
+            value={toDate}
+            onChange={setToDate}
+          />
           <div className="min-w-[140px]">
             <label className="mb-1 block text-xs font-medium text-slate-500">상태</label>
             <select

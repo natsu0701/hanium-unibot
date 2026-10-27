@@ -1,4 +1,11 @@
-import { ChevronDown, CircleHelp, FileText, Table } from 'lucide-react'
+import {
+  ChevronDown,
+  CircleHelp,
+  Copy,
+  FileText,
+  RefreshCw,
+  Table,
+} from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { LINE_ICON } from '../constants/iconProps'
 import { sendChatMessage } from '../api/chatApi'
@@ -14,6 +21,9 @@ const QUICK_QUESTIONS = [
 
 const FAIL_HINT =
   '다른 표현이나 구체적인 학사 용어로 다시 질문해 보세요'
+
+const EMPTY_TITLE = 'Uni-Bot'
+const EMPTY_SUBTITLE = '학사 규정 검색 AI Uni-Bot입니다!'
 
 const CHIP_CLASS =
   'border border-slate-300 bg-slate-50 text-xs font-medium leading-snug text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700'
@@ -257,15 +267,8 @@ function ChatScreen({
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
-  const [messages, setMessages] = useState([
-    {
-      id: crypto.randomUUID(),
-      text: '안녕하세요! 학사 행정 관련 질문을 입력해 주세요.',
-      sender: 'bot',
-      sources: [],
-      isGreeting: true,
-    },
-  ])
+  const [messages, setMessages] = useState([])
+  const [copiedId, setCopiedId] = useState('')
 
   const bottomRef = useRef(null)
 
@@ -319,6 +322,7 @@ function ChatScreen({
           text: answer,
           sender: 'bot',
           sources,
+          question: trimmed,
           isFailed: sources.length === 0,
         },
       ])
@@ -332,6 +336,7 @@ function ChatScreen({
             '죄송합니다. 답변을 가져오는 중 오류가 발생했습니다.',
           sender: 'bot',
           sources: [],
+          question: trimmed,
           isFailed: true,
         },
       ])
@@ -353,6 +358,75 @@ function ChatScreen({
     handleSendMessage(question)
   }
 
+  const handleCopyAnswer = async (message) => {
+    const text = String(message?.text || '').trim()
+
+    if (!text) {
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedId(message.id)
+      window.setTimeout(() => {
+        setCopiedId((current) => (current === message.id ? '' : current))
+      }, 1500)
+    } catch {
+      setCopiedId('')
+    }
+  }
+
+  const handleRegenerate = async (message) => {
+    const question = String(message?.question || '').trim()
+
+    if (!question || isLoading) {
+      return
+    }
+
+    setIsLoading(true)
+
+    try {
+      const response = await sendChatMessage(question, currentSchoolId)
+      const answer =
+        response?.answer || '답변을 생성하지 못했습니다.'
+      const sources = Array.isArray(response?.sources)
+        ? response.sources.filter(
+            (source) => source && typeof source === 'object',
+          )
+        : []
+
+      setMessages((previousMessages) =>
+        previousMessages.map((item) =>
+          item.id === message.id
+            ? {
+                ...item,
+                text: answer,
+                sources,
+                isFailed: sources.length === 0,
+              }
+            : item,
+        ),
+      )
+    } catch (error) {
+      setMessages((previousMessages) =>
+        previousMessages.map((item) =>
+          item.id === message.id
+            ? {
+                ...item,
+                text:
+                  error?.message ||
+                  '죄송합니다. 답변을 가져오는 중 오류가 발생했습니다.',
+                sources: [],
+                isFailed: true,
+              }
+            : item,
+        ),
+      )
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleKeyDown = (event) => {
     if (event.nativeEvent.isComposing) {
       return
@@ -368,6 +442,8 @@ function ChatScreen({
     ? `[${currentSchoolName || '선택 학교'} 학사요람 기반]`
     : '[전체 문서 검색]'
 
+  const hasStarted = messages.some((message) => message.sender === 'user')
+
   return (
     <section className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-slate-100">
       <header className="border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
@@ -377,6 +453,23 @@ function ChatScreen({
       </header>
 
       <section className={`flex-1 overflow-y-auto py-4 ${CHAT_GUTTER}`}>
+        {!hasStarted && !isLoading ? (
+          <div className="flex w-full flex-col items-center pt-10 text-center sm:pt-14">
+            <img
+              src="/bot-avatar.png"
+              alt=""
+              className="h-20 w-20 rounded-full bg-[#7C5CFF] object-contain p-1 ring-1 ring-black/10"
+            />
+            <h2
+              className="mt-4 text-3xl font-black tracking-tight text-slate-800"
+              style={{ fontFamily: 'Arial Black, sans-serif' }}
+            >
+              {EMPTY_TITLE}
+            </h2>
+            <p className="mt-2 text-sm text-slate-500">{EMPTY_SUBTITLE}</p>
+          </div>
+        ) : null}
+
         <div className="flex w-full flex-col gap-3">
           {messages.map((message, index) => {
             const hasSources =
@@ -385,9 +478,7 @@ function ChatScreen({
 
             const isBot = message.sender === 'bot'
             const isFailed =
-              isBot &&
-              !message.isGreeting &&
-              (message.isFailed === true || !hasSources)
+              isBot && (message.isFailed === true || !hasSources)
             const previousSender =
               index > 0 ? messages[index - 1].sender : null
             const showAvatar = isBot && previousSender !== 'bot'
@@ -408,47 +499,86 @@ function ChatScreen({
                 ) : null}
 
                 <div
-                  className={`unibot-box min-w-0 px-4 py-2 text-sm leading-relaxed shadow-sm ${
-                    isBot
-                      ? 'max-w-[80%] bg-white text-slate-700 max-sm:rounded-bl-none sm:rounded-bl-md'
-                      : 'max-w-[80%] bg-yellow-300 text-slate-900 max-sm:rounded-br-none sm:rounded-br-md'
+                  className={`relative min-w-0 max-w-[80%] ${
+                    isBot ? 'text-slate-700' : 'text-slate-900'
                   }`}
                 >
-                  {isBot && !message.isGreeting && (
-                    <div className="mb-2">
-                      <span className="unibot-box inline-flex items-center border border-slate-200 bg-transparent px-2.5 py-0.5 text-[10px] font-medium tracking-tight text-slate-500 sm:rounded-full">
-                        {sourceBadgeLabel}
-                      </span>
-                    </div>
-                  )}
+                  {isBot ? (
+                    <span
+                      className="absolute -left-[6px] top-3 h-0 w-0 border-y-[6px] border-r-[7px] border-y-transparent border-r-white"
+                      aria-hidden
+                    />
+                  ) : null}
 
-                  <div className="flex items-start gap-2">
-                    {isFailed && (
-                      <CircleHelp
-                        size={16}
-                        {...LINE_ICON}
-                        className="mt-0.5 shrink-0 text-red-500"
-                        aria-hidden
-                      />
+                  <div
+                    className={`unibot-box relative min-w-0 px-4 py-2 text-sm leading-relaxed shadow-sm ${
+                      isBot
+                        ? 'rounded-tl-none bg-white'
+                        : 'bg-yellow-300 max-sm:rounded-br-none sm:rounded-br-md'
+                    }`}
+                  >
+                    {isBot && (
+                      <div className="mb-2">
+                        <span className="unibot-box inline-flex items-center border border-slate-200 bg-transparent px-2.5 py-0.5 text-[10px] font-medium tracking-tight text-slate-500 sm:rounded-full">
+                          {sourceBadgeLabel}
+                        </span>
+                      </div>
                     )}
 
-                    <div className="min-w-0 flex-1">
-                      <p className="m-0 whitespace-pre-wrap">{message.text}</p>
-
+                    <div className="flex items-start gap-2">
                       {isFailed && (
-                        <p className="mt-2 text-xs leading-relaxed text-slate-500">
-                          {FAIL_HINT}
-                        </p>
+                        <CircleHelp
+                          size={16}
+                          {...LINE_ICON}
+                          className="mt-0.5 shrink-0 text-red-500"
+                          aria-hidden
+                        />
                       )}
-                    </div>
-                  </div>
 
-                  {isBot && hasSources && (
-                    <SourceEvidencePanel
-                      sources={message.sources}
-                      onSourceClick={onSourceClick}
-                    />
-                  )}
+                      <div className="min-w-0 flex-1">
+                        <p className="m-0 whitespace-pre-wrap">{message.text}</p>
+
+                        {isFailed && (
+                          <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                            {FAIL_HINT}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {isBot && (
+                      <div className="mt-2 flex items-center gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => handleCopyAnswer(message)}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                          aria-label="답변 복사"
+                          title={copiedId === message.id ? '복사됨' : '복사'}
+                        >
+                          <Copy size={15} {...LINE_ICON} aria-hidden />
+                        </button>
+                        {message.question ? (
+                          <button
+                            type="button"
+                            onClick={() => handleRegenerate(message)}
+                            disabled={isLoading}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                            aria-label="답변 새로 고침"
+                            title="새로 고침"
+                          >
+                            <RefreshCw size={15} {...LINE_ICON} aria-hidden />
+                          </button>
+                        ) : null}
+                      </div>
+                    )}
+
+                    {isBot && hasSources && (
+                      <SourceEvidencePanel
+                        sources={message.sources}
+                        onSourceClick={onSourceClick}
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
             )
@@ -461,11 +591,17 @@ function ChatScreen({
               ) : (
                 <BotAvatar />
               )}
-              <div className="unibot-box bg-white px-4 py-3 shadow-sm max-sm:rounded-bl-none sm:rounded-bl-md">
-                <div className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-slate-400 [animation-delay:0ms]" />
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-slate-400 [animation-delay:200ms]" />
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-slate-400 [animation-delay:400ms]" />
+              <div className="relative">
+                <span
+                  className="absolute -left-[6px] top-3 h-0 w-0 border-y-[6px] border-r-[7px] border-y-transparent border-r-white"
+                  aria-hidden
+                />
+                <div className="unibot-box rounded-tl-none bg-white px-4 py-3 shadow-sm">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-slate-400 [animation-delay:0ms]" />
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-slate-400 [animation-delay:200ms]" />
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-slate-400 [animation-delay:400ms]" />
+                  </div>
                 </div>
               </div>
             </div>
@@ -477,6 +613,9 @@ function ChatScreen({
 
       <footer className={`shrink-0 border-t border-slate-200 bg-white py-3 ${CHAT_GUTTER}`}>
         <div className="mb-3 w-full">
+          <p className="mb-1.5 text-[11px] font-medium text-slate-400">
+            이런 질문도 가능해요!
+          </p>
           <QuickQuestionChips
             disabled={isLoading}
             onSelect={handleQuickQuestion}
