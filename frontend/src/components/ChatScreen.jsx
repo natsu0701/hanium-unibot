@@ -18,6 +18,20 @@ const FAIL_HINT =
 const CHIP_CLASS =
   'border border-slate-300 bg-slate-50 text-xs font-medium leading-snug text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700'
 
+const CHAT_GUTTER = 'px-4'
+
+function BotAvatar() {
+  return (
+    <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-[#8B5CF6] ring-1 ring-black/10">
+      <img
+        src="/bot1.png"
+        alt="Uni-Bot"
+        className="h-full w-full scale-110 object-cover object-[center_12%]"
+      />
+    </div>
+  )
+}
+
 function QuickQuestionChips({ onSelect, disabled = false }) {
   const [expanded, setExpanded] = useState(false)
   const visibleQuestions = expanded
@@ -364,35 +378,45 @@ function ChatScreen({
         </h1>
       </header>
 
-      <section className="flex-1 overflow-y-auto py-5 pr-3">
+      <section className={`flex-1 overflow-y-auto py-4 ${CHAT_GUTTER}`}>
         <div className="flex w-full flex-col gap-3">
-          {messages.map((message) => {
+          {messages.map((message, index) => {
             const hasSources =
               Array.isArray(message.sources) &&
               message.sources.length > 0
 
+            const isBot = message.sender === 'bot'
             const isFailed =
-              message.sender === 'bot' &&
+              isBot &&
               !message.isGreeting &&
               (message.isFailed === true || !hasSources)
+            const previousSender =
+              index > 0 ? messages[index - 1].sender : null
+            const showAvatar = isBot && previousSender !== 'bot'
 
             return (
               <div
                 key={message.id}
-                className={`flex ${
-                  message.sender === 'user'
-                    ? 'justify-end'
-                    : 'justify-start'
+                className={`flex items-start gap-2 ${
+                  isBot ? 'justify-start' : 'justify-end'
                 }`}
               >
+                {isBot ? (
+                  showAvatar ? (
+                    <BotAvatar />
+                  ) : (
+                    <div className="h-10 w-10 shrink-0" aria-hidden />
+                  )
+                ) : null}
+
                 <div
                   className={`unibot-box min-w-0 px-4 py-2 text-sm leading-relaxed shadow-sm ${
-                    message.sender === 'user'
-                      ? 'max-w-[80%] bg-yellow-300 text-slate-900 max-sm:rounded-br-none sm:rounded-br-md'
-                      : 'w-full max-w-[80%] bg-white text-slate-700 max-sm:rounded-bl-none sm:rounded-bl-md'
+                    isBot
+                      ? 'w-full max-w-[80%] bg-white text-slate-700 max-sm:rounded-bl-none sm:rounded-bl-md'
+                      : 'max-w-[80%] bg-yellow-300 text-slate-900 max-sm:rounded-br-none sm:rounded-br-md'
                   }`}
                 >
-                  {message.sender === 'bot' && !message.isGreeting && (
+                  {isBot && !message.isGreeting && (
                     <div className="mb-2">
                       <span className="unibot-box inline-flex items-center border border-slate-200 bg-transparent px-2.5 py-0.5 text-[10px] font-medium tracking-tight text-slate-500 sm:rounded-full">
                         {sourceBadgeLabel}
@@ -421,7 +445,7 @@ function ChatScreen({
                     </div>
                   </div>
 
-                  {message.sender === 'bot' && hasSources && (
+                  {isBot && hasSources && (
                     <SourceEvidencePanel
                       sources={message.sources}
                       onSourceClick={onSourceClick}
@@ -433,7 +457,12 @@ function ChatScreen({
           })}
 
           {isLoading && (
-            <div className="flex justify-start">
+            <div className="flex items-start justify-start gap-2">
+              {messages[messages.length - 1]?.sender === 'bot' ? (
+                <div className="h-10 w-10 shrink-0" aria-hidden />
+              ) : (
+                <BotAvatar />
+              )}
               <div className="unibot-box bg-white px-4 py-3 shadow-sm max-sm:rounded-bl-none sm:rounded-bl-md">
                 <div className="flex items-center gap-1.5">
                   <span className="h-2 w-2 animate-pulse rounded-full bg-slate-400 [animation-delay:0ms]" />
@@ -448,7 +477,7 @@ function ChatScreen({
         </div>
       </section>
 
-      <footer className="shrink-0 border-t border-slate-200 bg-white py-3 pr-3">
+      <footer className={`shrink-0 border-t border-slate-200 bg-white py-3 ${CHAT_GUTTER}`}>
         <div className="mb-3 w-full">
           <QuickQuestionChips
             disabled={isLoading}
