@@ -22,13 +22,11 @@ const CHAT_GUTTER = 'px-4'
 
 function BotAvatar() {
   return (
-    <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-[#8B5CF6] ring-1 ring-black/10">
-      <img
-        src="/bot1.png"
-        alt="Uni-Bot"
-        className="h-full w-full scale-110 object-cover object-[center_12%]"
-      />
-    </div>
+    <img
+      src="/bot-avatar.png"
+      alt="Uni-Bot"
+      className="h-10 w-10 shrink-0 rounded-full bg-[#7C5CFF] object-contain p-[2px] ring-1 ring-black/10"
+    />
   )
 }
 
@@ -412,7 +410,7 @@ function ChatScreen({
                 <div
                   className={`unibot-box min-w-0 px-4 py-2 text-sm leading-relaxed shadow-sm ${
                     isBot
-                      ? 'w-full max-w-[80%] bg-white text-slate-700 max-sm:rounded-bl-none sm:rounded-bl-md'
+                      ? 'max-w-[80%] bg-white text-slate-700 max-sm:rounded-bl-none sm:rounded-bl-md'
                       : 'max-w-[80%] bg-yellow-300 text-slate-900 max-sm:rounded-br-none sm:rounded-br-md'
                   }`}
                 >
