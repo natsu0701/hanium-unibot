@@ -40,15 +40,73 @@ function isTableSource(source) {
   return Boolean(source) && source.is_table === true
 }
 
-function sourceLabel(source) {
-  if (!source || typeof source !== 'object') {
-    return '문서 · -페이지'
+function unwrapExtraParens(value) {
+  let text = String(value || '').trim()
+
+  while (/^\(.*\)$/.test(text)) {
+    const inner = text.slice(1, -1).trim()
+
+    if (!inner.startsWith('(')) {
+      break
+    }
+
+    text = inner
   }
 
-  return (
-    source.text ||
-    `${source.doc_name || '문서'} · ${source.page || '-'}페이지`
+  return text
+}
+
+function formatArticleLabel(article, articleTitle) {
+  const articleRaw = String(article || '').trim()
+  const numberMatch = articleRaw.match(/\d+/)
+  const clause = numberMatch
+    ? `제${numberMatch[0]}조`
+    : articleRaw.replace(/\s+/g, '')
+
+  const title = unwrapExtraParens(articleTitle)
+
+  if (clause && title) {
+    if (title.startsWith('(')) {
+      return `${clause} ${title}`
+    }
+
+    return `${clause} (${title})`
+  }
+
+  return clause || title
+}
+
+function formatPageLabel(page) {
+  const parsed = Number(page)
+
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return ''
+  }
+
+  return `${parsed}P`
+}
+
+function sourceLabel(source) {
+  if (!source || typeof source !== 'object') {
+    return '건국대학교 학사 요람'
+  }
+
+  const parts = ['건국대학교 학사 요람']
+  const pageLabel = formatPageLabel(source.page)
+  const articleLabel = formatArticleLabel(
+    source.article,
+    source.article_title,
   )
+
+  if (pageLabel) {
+    parts.push(pageLabel)
+  }
+
+  if (articleLabel) {
+    parts.push(articleLabel)
+  }
+
+  return parts.join(' · ')
 }
 
 function sourceEvidence(source) {
@@ -76,18 +134,20 @@ function SourceChip({ source, onSelect, isActive }) {
     <button
       type="button"
       onClick={() => onSelect?.(source)}
-      className={`group relative inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 ${CHIP_CLASS} ${
+      className={`group relative inline-flex max-w-full min-w-0 items-start gap-1.5 rounded-full px-3 py-1 text-left ${CHIP_CLASS} ${
         isActive ? 'border-slate-400' : ''
       }`}
     >
       <Icon
         size={14}
         {...LINE_ICON}
-        className={`shrink-0 ${isActive ? 'text-slate-700' : 'text-slate-500'}`}
+        className={`mt-0.5 shrink-0 ${isActive ? 'text-slate-700' : 'text-slate-500'}`}
         aria-hidden
       />
 
-      {sourceLabel(safeSource)}
+      <span className="min-w-0 whitespace-normal break-keep">
+        {sourceLabel(safeSource)}
+      </span>
 
       {isTable && (
         <span
@@ -116,8 +176,8 @@ function SourceEvidencePanel({ sources, onSourceClick }) {
   }
 
   return (
-    <div className="mt-3 w-full border-t border-slate-100 pt-3">
-      <div className="flex w-full flex-wrap items-center gap-2">
+    <div className="mt-3 min-w-0 w-full border-t border-slate-100 pt-3">
+      <div className="flex min-w-0 w-full flex-wrap items-start gap-2">
         <span className="shrink-0 text-[11px] font-semibold text-slate-400">
           근거
         </span>
@@ -142,7 +202,7 @@ function SourceEvidencePanel({ sources, onSourceClick }) {
         <div className="min-h-0 overflow-hidden">
           <div className="unibot-box w-full border border-slate-100 bg-slate-50 p-4 transition-all duration-300 sm:rounded-lg">
             <div className="mb-1.5 text-left text-[11px] font-medium text-slate-400">
-              페이지: {activeSource?.page ?? '-'}쪽
+              {formatPageLabel(activeSource?.page) || '-'}
             </div>
             <div className="my-2 border-t border-slate-200/60" />
             <pre className="m-0 w-full whitespace-pre-wrap text-left font-sans text-[12px] leading-relaxed text-slate-600">
@@ -304,10 +364,10 @@ function ChatScreen({
                 }`}
               >
                 <div
-                  className={`unibot-box px-4 py-2 text-sm leading-relaxed shadow-sm ${
+                  className={`unibot-box min-w-0 px-4 py-2 text-sm leading-relaxed shadow-sm ${
                     message.sender === 'user'
                       ? 'max-w-[80%] bg-yellow-300 text-slate-900 max-sm:rounded-br-none sm:rounded-br-md'
-                      : 'max-w-[80%] bg-white text-slate-700 max-sm:rounded-bl-none sm:rounded-bl-md'
+                      : 'w-full max-w-[80%] bg-white text-slate-700 max-sm:rounded-bl-none sm:rounded-bl-md'
                   }`}
                 >
                   {message.sender === 'bot' && !message.isGreeting && (
