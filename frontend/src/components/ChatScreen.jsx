@@ -1,4 +1,4 @@
-import { CircleHelp, FileText, Table } from 'lucide-react'
+import { ChevronDown, CircleHelp, FileText, Table } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { LINE_ICON } from '../constants/iconProps'
 import { sendChatMessage } from '../api/chatApi'
@@ -19,19 +19,41 @@ const CHIP_CLASS =
   'border border-slate-300 bg-slate-50 text-xs font-medium leading-snug text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700'
 
 function QuickQuestionChips({ onSelect, disabled = false }) {
+  const [expanded, setExpanded] = useState(false)
+  const visibleQuestions = expanded
+    ? QUICK_QUESTIONS
+    : QUICK_QUESTIONS.slice(0, 2)
+
   return (
-    <div className="flex w-full flex-wrap items-start gap-2">
-      {QUICK_QUESTIONS.map((question) => (
-        <button
-          key={question}
-          type="button"
-          onClick={() => onSelect(question)}
-          disabled={disabled}
-          className={`unibot-box max-w-full whitespace-normal px-3 py-1.5 text-left disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm ${CHIP_CLASS}`}
-        >
-          {question}
-        </button>
-      ))}
+    <div className="flex w-full flex-col items-start gap-2">
+      <div className="flex w-full flex-wrap items-start gap-2">
+        {visibleQuestions.map((question) => (
+          <button
+            key={question}
+            type="button"
+            onClick={() => onSelect(question)}
+            disabled={disabled}
+            className={`unibot-box max-w-full whitespace-normal px-3 py-1.5 text-left disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm ${CHIP_CLASS}`}
+          >
+            {question}
+          </button>
+        ))}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setExpanded((current) => !current)}
+        aria-expanded={expanded}
+        className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 transition hover:text-slate-700"
+      >
+        <ChevronDown
+          size={14}
+          {...LINE_ICON}
+          className={`transition ${expanded ? 'rotate-180' : ''}`}
+          aria-hidden
+        />
+        {expanded ? '접기' : '질문 더보기'}
+      </button>
     </div>
   )
 }
