@@ -24,6 +24,8 @@ const FAIL_HINT =
 
 const EMPTY_TITLE = 'Uni-Bot'
 const EMPTY_SUBTITLE = '학사 규정 검색 AI Uni-Bot입니다!'
+const GREETING_TEXT =
+  '안녕하세요! 학사 행정 규정 검색 AI Uni-Bot입니다. 무엇이 궁금하신가요?'
 
 const CHIP_CLASS =
   'border border-slate-300 bg-slate-50 text-xs font-medium leading-snug text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700'
@@ -267,7 +269,15 @@ function ChatScreen({
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
-  const [messages, setMessages] = useState([])
+  const [messages, setMessages] = useState([
+    {
+      id: crypto.randomUUID(),
+      text: GREETING_TEXT,
+      sender: 'bot',
+      sources: [],
+      isGreeting: true,
+    },
+  ])
   const [copiedId, setCopiedId] = useState('')
 
   const bottomRef = useRef(null)
@@ -470,15 +480,18 @@ function ChatScreen({
           </div>
         ) : null}
 
-        <div className="flex w-full flex-col gap-3">
+        <div className={`flex w-full flex-col gap-3 ${hasStarted ? '' : 'mt-6'}`}>
           {messages.map((message, index) => {
             const hasSources =
               Array.isArray(message.sources) &&
               message.sources.length > 0
 
             const isBot = message.sender === 'bot'
+            const isGreeting = message.isGreeting === true
             const isFailed =
-              isBot && (message.isFailed === true || !hasSources)
+              isBot &&
+              !isGreeting &&
+              (message.isFailed === true || !hasSources)
             const previousSender =
               index > 0 ? messages[index - 1].sender : null
             const showAvatar = isBot && previousSender !== 'bot'
@@ -517,7 +530,7 @@ function ChatScreen({
                         : 'bg-yellow-300 max-sm:rounded-br-none sm:rounded-br-md'
                     }`}
                   >
-                    {isBot && (
+                    {isBot && !isGreeting && (
                       <div className="mb-2">
                         <span className="unibot-box inline-flex items-center border border-slate-200 bg-transparent px-2.5 py-0.5 text-[10px] font-medium tracking-tight text-slate-500 sm:rounded-full">
                           {sourceBadgeLabel}
@@ -546,7 +559,7 @@ function ChatScreen({
                       </div>
                     </div>
 
-                    {isBot && (
+                    {isBot && !isGreeting && (
                       <div className="mt-2 flex items-center gap-0.5">
                         <button
                           type="button"
