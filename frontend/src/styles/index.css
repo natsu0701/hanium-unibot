@@ -8,6 +8,14 @@
 }
 
 @layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
   html {
     font-family: 'Pretendard Variable', Pretendard, ui-sans-serif, system-ui,
       sans-serif;
