@@ -113,7 +113,7 @@ function Home({
           <img
             src="/bot1.png"
             alt="Uni-Bot Mascot"
-            className="z-10 mt-[127px] mb-[-168px] flex w-[619px] max-w-full flex-wrap overflow-hidden rounded-[170px] object-contain drop-shadow-2xl"
+            className="z-10 mt-[127px] mb-[-168px] w-[619px] max-w-full origin-top scale-[2] overflow-hidden rounded-[170px] object-contain object-top drop-shadow-2xl"
           />
 
           <div className="pointer-events-none absolute left-1/2 top-1/2 h-96 w-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/10 blur-3xl" />
