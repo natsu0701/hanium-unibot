@@ -46,7 +46,7 @@ function QuickQuestionChips({ onSelect, disabled = false }) {
   const [expanded, setExpanded] = useState(false)
   const visibleQuestions = expanded
     ? QUICK_QUESTIONS
-    : QUICK_QUESTIONS.slice(0, 2)
+    : QUICK_QUESTIONS.slice(0, 3)
 
   return (
     <div className="flex w-full items-start gap-1.5">

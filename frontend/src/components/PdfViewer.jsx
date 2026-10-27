@@ -11,10 +11,14 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Columns2,
   Download,
   Printer,
   Search,
+  Square,
   X,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react'
 import { Document, Page, pdfjs } from 'react-pdf'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
@@ -35,6 +39,13 @@ const SCHOOL_OPTIONS = [
 ]
 
 const MAX_SEARCH_HITS = 200
+const FIT_PADDING_X = 24
+const FIT_PADDING_Y = 24
+const FIT_GAP = 12
+const FIT_SHRINK = 0.92
+const MIN_ZOOM = 0.5
+const MAX_ZOOM = 3
+const ZOOM_STEP = 0.1
 
 function normalizeText(value = '') {
   return String(value)
@@ -89,7 +100,10 @@ const PdfViewer = forwardRef(function PdfViewer(
   const [numPages, setNumPages] = useState(null)
   const [pageNumber, setPageNumber] = useState(1)
   const [pageInput, setPageInput] = useState('1')
-  const [containerWidth, setContainerWidth] = useState(0)
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
+  const [pageSize, setPageSize] = useState({ width: 595, height: 842 })
+  const [zoom, setZoom] = useState(1)
+  const [viewMode, setViewMode] = useState('single')
   const [searchQuery, setSearchQuery] = useState('')
   const [searchDraft, setSearchDraft] = useState('')
   const [matches, setMatches] = useState([])
@@ -151,14 +165,17 @@ const PdfViewer = forwardRef(function PdfViewer(
       return undefined
     }
 
-    const updateContainerWidth = () => {
-      setContainerWidth(container.clientWidth)
+    const updateContainerSize = () => {
+      setContainerSize({
+        width: container.clientWidth,
+        height: container.clientHeight,
+      })
     }
 
-    updateContainerWidth()
+    updateContainerSize()
 
     const resizeObserver = new ResizeObserver(
-      updateContainerWidth,
+      updateContainerSize,
     )
 
     resizeObserver.observe(container)
@@ -524,11 +541,60 @@ const PdfViewer = forwardRef(function PdfViewer(
     )
   }
 
+  useEffect(() => {
+    let cancelled = false
+    const pdf = pdfDocRef.current
+
+    if (!pdf || !pageNumber) {
+      return undefined
+    }
+
+    pdf.getPage(pageNumber).then((page) => {
+      if (cancelled) {
+        return
+      }
+
+      const viewport = page.getViewport({ scale: 1 })
+      setPageSize({ width: viewport.width, height: viewport.height })
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [pageNumber, numPages, fileUrl])
+
+  const showSecondPage =
+    viewMode === 'two' &&
+    Boolean(numPages) &&
+    pageNumber < numPages
+
+  const pageWidth = useMemo(() => {
+    const { width: containerWidth, height: containerHeight } = containerSize
+
+    if (!containerWidth || !containerHeight || !pageSize.width) {
+      return undefined
+    }
+
+    const pageCount = showSecondPage ? 2 : 1
+    const gap = pageCount === 2 ? FIT_GAP : 0
+    const availableWidth =
+      (containerWidth - FIT_PADDING_X - gap) / pageCount
+    const availableHeight = containerHeight - FIT_PADDING_Y
+    const fit = Math.min(
+      availableWidth / pageSize.width,
+      availableHeight / pageSize.height,
+    )
+
+    return Math.max(120, pageSize.width * fit * FIT_SHRINK * zoom)
+  }, [containerSize, pageSize, showSecondPage, zoom])
+
+  const pageStep = viewMode === 'two' ? 2 : 1
+
   const goPrevPage = () => {
     clearHighlights()
 
     setPageNumber((previousPage) =>
-      Math.max(previousPage - 1, 1),
+      Math.max(previousPage - pageStep, 1),
     )
   }
 
@@ -537,8 +603,20 @@ const PdfViewer = forwardRef(function PdfViewer(
 
     setPageNumber((previousPage) =>
       numPages
-        ? Math.min(previousPage + 1, numPages)
-        : previousPage + 1,
+        ? Math.min(previousPage + pageStep, numPages)
+        : previousPage + pageStep,
+    )
+  }
+
+  const zoomOut = () => {
+    setZoom((current) =>
+      Math.max(MIN_ZOOM, Math.round((current - ZOOM_STEP) * 10) / 10),
+    )
+  }
+
+  const zoomIn = () => {
+    setZoom((current) =>
+      Math.min(MAX_ZOOM, Math.round((current + ZOOM_STEP) * 10) / 10),
     )
   }
 
@@ -703,9 +781,9 @@ const PdfViewer = forwardRef(function PdfViewer(
 
       <section
         ref={containerRef}
-        className="flex-1 overflow-auto bg-slate-200/60 px-4 py-6"
+        className="flex-1 overflow-auto bg-slate-200/60"
       >
-        <div className="mx-auto flex w-full max-w-3xl justify-center">
+        <div className="flex min-h-full min-w-full items-center justify-center p-3">
           <Document
             file={pdfSource}
             onLoadSuccess={handleLoadSuccess}
@@ -721,73 +799,137 @@ const PdfViewer = forwardRef(function PdfViewer(
             }
             className="flex justify-center"
           >
-            <div ref={pageRef}>
+            <div
+              ref={pageRef}
+              className="flex items-start justify-center gap-3"
+            >
               <Page
                 key={`${pageNumber}-${highlightText}-${searchQuery}`}
                 pageNumber={pageNumber}
-                width={
-                  containerWidth
-                    ? Math.min(containerWidth - 32, 800)
-                    : undefined
-                }
+                width={pageWidth}
                 className="overflow-hidden rounded-lg shadow-lg"
                 renderAnnotationLayer
                 renderTextLayer
                 onRenderTextLayerSuccess={handleTextLayerReady}
               />
+              {showSecondPage ? (
+                <Page
+                  key={`${pageNumber + 1}-${highlightText}-${searchQuery}-b`}
+                  pageNumber={pageNumber + 1}
+                  width={pageWidth}
+                  className="overflow-hidden rounded-lg shadow-lg"
+                  renderAnnotationLayer
+                  renderTextLayer
+                  onRenderTextLayerSuccess={handleTextLayerReady}
+                />
+              ) : null}
             </div>
           </Document>
         </div>
       </section>
 
-      <footer className="shrink-0 border-t border-slate-200 bg-white px-4 py-3">
-        <div className="mx-auto flex w-full max-w-3xl items-center justify-center gap-4">
-          <button
-            type="button"
-            onClick={goPrevPage}
-            disabled={pageNumber <= 1}
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <ChevronLeft size={16} {...LINE_ICON} />
-            이전
-          </button>
+      <footer className="shrink-0 border-t border-slate-200 bg-white px-3 py-2.5">
+        <div className="flex w-full items-center gap-2">
+          <div className="w-[4.5rem] shrink-0" aria-hidden />
+          <div className="flex min-w-0 flex-1 items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={goPrevPage}
+              disabled={pageNumber <= 1}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ChevronLeft size={16} {...LINE_ICON} />
+              이전
+            </button>
 
-          <div className="flex items-center gap-1.5 text-sm font-medium text-slate-600">
-            <input
-              type="number"
-              min={1}
-              max={numPages ?? undefined}
-              value={pageInput}
-              onChange={(event) =>
-                setPageInput(event.target.value)
-              }
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  handlePageInputSubmit()
+            <div className="flex items-center gap-1.5 text-sm font-medium text-slate-600">
+              <button
+                type="button"
+                onClick={zoomOut}
+                disabled={zoom <= MIN_ZOOM}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="축소"
+                title="축소"
+              >
+                <ZoomOut size={16} {...LINE_ICON} />
+              </button>
+              <button
+                type="button"
+                onClick={zoomIn}
+                disabled={zoom >= MAX_ZOOM}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="확대"
+                title="확대"
+              >
+                <ZoomIn size={16} {...LINE_ICON} />
+              </button>
+              <input
+                type="number"
+                min={1}
+                max={numPages ?? undefined}
+                value={pageInput}
+                onChange={(event) =>
+                  setPageInput(event.target.value)
                 }
-              }}
-              onBlur={handlePageInputSubmit}
-              aria-label="페이지 번호 입력"
-              className="w-14 rounded-md border border-slate-300 px-2 py-1 text-center text-sm outline-none focus:border-[#654AEC] focus:ring-2 focus:ring-[#654AEC]/20"
-            />
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    handlePageInputSubmit()
+                  }
+                }}
+                onBlur={handlePageInputSubmit}
+                aria-label="페이지 번호 입력"
+                className="w-14 rounded-md border border-slate-300 px-2 py-1 text-center text-sm outline-none focus:border-[#654AEC] focus:ring-2 focus:ring-[#654AEC]/20"
+              />
 
-            <span>/ {numPages ?? '-'}</span>
+              <span>/ {numPages ?? '-'}</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={goNextPage}
+              disabled={
+                numPages
+                  ? pageNumber >= numPages
+                  : false
+              }
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              다음
+              <ChevronRight size={16} {...LINE_ICON} />
+            </button>
           </div>
 
-          <button
-            type="button"
-            onClick={goNextPage}
-            disabled={
-              numPages
-                ? pageNumber >= numPages
-                : false
-            }
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            다음
-            <ChevronRight size={16} {...LINE_ICON} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setViewMode('single')}
+              aria-pressed={viewMode === 'single'}
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-md border transition ${
+                viewMode === 'single'
+                  ? 'border-violet-300 bg-violet-50 text-violet-700'
+                  : 'border-slate-300 text-slate-600 hover:bg-slate-100'
+              }`}
+              aria-label="한 페이지 보기"
+              title="한 페이지 보기"
+            >
+              <Square size={15} {...LINE_ICON} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('two')}
+              aria-pressed={viewMode === 'two'}
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-md border transition ${
+                viewMode === 'two'
+                  ? 'border-violet-300 bg-violet-50 text-violet-700'
+                  : 'border-slate-300 text-slate-600 hover:bg-slate-100'
+              }`}
+              aria-label="두 페이지 보기"
+              title="두 페이지 보기"
+            >
+              <Columns2 size={15} {...LINE_ICON} />
+            </button>
+          </div>
         </div>
       </footer>
     </aside>
