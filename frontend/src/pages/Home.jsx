@@ -40,8 +40,8 @@ function Home({
   }
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-[#654AEC] font-sans">
-      <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-between overflow-hidden px-8 lg:flex-row lg:px-12">
+    <div className="flex min-h-screen w-full flex-col overflow-x-hidden bg-[#654AEC] font-sans">
+      <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-between overflow-hidden px-8 lg:flex-row lg:overflow-visible lg:px-12">
         <div className="z-20 flex min-w-[100px] w-[520px] max-w-full flex-col items-start pt-20 lg:pt-0">
           <p className="mb-2 text-lg font-medium text-white/80 md:text-xl">
             학사 행정 AI 비서
@@ -113,14 +113,14 @@ function Home({
           <img
             src="/bot1.png"
             alt="Uni-Bot Mascot"
-            className="z-10 mt-[127px] mb-[-168px] w-[619px] max-w-full origin-top scale-[2] overflow-hidden rounded-[170px] object-contain object-top drop-shadow-2xl"
+            className="z-10 mt-[127px] mb-[-168px] w-[619px] max-w-full origin-top overflow-hidden rounded-[170px] object-contain object-top drop-shadow-2xl lg:scale-[2]"
           />
 
           <div className="pointer-events-none absolute left-1/2 top-1/2 h-96 w-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/10 blur-3xl" />
         </div>
       </main>
 
-      <footer className="w-full bg-[#5A6268] py-4 text-center">
+      <footer className="relative z-20 w-full bg-[#5A6268] py-4 text-center">
         <p className="text-center text-xs font-light text-white/70">
           unibot@2026
         </p>
