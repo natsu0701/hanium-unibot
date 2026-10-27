@@ -180,18 +180,16 @@ const PdfViewer = forwardRef(function PdfViewer(
     )
 
     textSpans.forEach((span) => {
+      span.classList.remove('pdf-evidence-highlight')
       span.style.backgroundColor = ''
       span.style.borderRadius = ''
       span.style.boxShadow = ''
+      span.style.mixBlendMode = ''
     })
   }
 
   const applyHighlightStyle = (span) => {
-    span.style.backgroundColor =
-      'rgba(250, 204, 21, 0.75)'
-    span.style.borderRadius = '2px'
-    span.style.boxShadow =
-      '0 0 0 1px rgba(234, 179, 8, 0.28)'
+    span.classList.add('pdf-evidence-highlight')
   }
 
   const highlightNormalizedNeedle = (needle) => {
