@@ -25,8 +25,8 @@ function QuickQuestionChips({ onSelect, disabled = false }) {
     : QUICK_QUESTIONS.slice(0, 2)
 
   return (
-    <div className="flex w-full flex-col items-start gap-2">
-      <div className="flex w-full flex-wrap items-start gap-2">
+    <div className="flex w-full items-start gap-1.5">
+      <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2">
         {visibleQuestions.map((question) => (
           <button
             key={question}
@@ -44,15 +44,15 @@ function QuickQuestionChips({ onSelect, disabled = false }) {
         type="button"
         onClick={() => setExpanded((current) => !current)}
         aria-expanded={expanded}
-        className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 transition hover:text-slate-700"
+        aria-label={expanded ? '추천 질문 접기' : '추천 질문 더보기'}
+        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
       >
         <ChevronDown
-          size={14}
+          size={18}
           {...LINE_ICON}
           className={`transition ${expanded ? 'rotate-180' : ''}`}
           aria-hidden
         />
-        {expanded ? '접기' : '질문 더보기'}
       </button>
     </div>
   )
